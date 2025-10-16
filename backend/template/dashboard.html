@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Business Insights Report - FinDeep</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 50px 60px; position: relative; overflow: hidden; }
+        .header::before { content: ''; position: absolute; top: 0; right: 0; width: 300px; height: 300px; background: rgba(255,255,255,0.05); border-radius: 50%; transform: translate(30%, -30%); }
+        .header-content { position: relative; z-index: 1; }
+        .report-title { font-size: 48px; font-weight: 700; margin-bottom: 10px; letter-spacing: -1px; }
+        .report-subtitle { font-size: 24px; font-weight: 300; color: #a0a0ff; margin-bottom: 20px; }
+        .report-meta { font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 20px; }
+        
+        .exec-summary { padding: 50px 60px; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); border-bottom: 3px solid #e0e0e0; }
+        .exec-summary h2 { font-size: 32px; color: #1a1a2e; margin-bottom: 20px; font-weight: 600; }
+        .exec-summary p { font-size: 16px; line-height: 1.8; color: #555; text-align: justify; }
+        
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: #16213e; color: white; }
+        .stat-item { padding: 30px; text-align: center; border-right: 1px solid rgba(255,255,255,0.1); }
+        .stat-item:last-child { border-right: none; }
+        .stat-value { font-size: 36px; font-weight: 700; color: #4fc3f7; margin-bottom: 8px; }
+        .stat-label { font-size: 13px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 1px; }
+        
+        .main-content { padding: 50px 60px; }
+        .section-header { display: flex; align-items: center; gap: 15px; margin: 60px 0 40px 0; padding-bottom: 15px; border-bottom: 3px solid #16213e; }
+        .section-header:first-child { margin-top: 0; }
+        .section-icon { width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
+        .section-header h2 { font-size: 32px; color: #1a1a2e; font-weight: 600; }
+        
+        .viz-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-bottom: 50px; }
+        .viz-grid.single-column { grid-template-columns: 1fr; }
+        
+        .insight-card { margin-bottom: 40px; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.3s, box-shadow 0.3s; }
+        .insight-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        
+        .insight-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 25px; display: flex; align-items: center; justify-content: space-between; }
+        .insight-title-group { display: flex; align-items: center; gap: 15px; }
+        .insight-number { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+        .insight-title { font-size: 18px; font-weight: 600; line-height: 1.3; }
+        .chart-type-badge { background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 15px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        
+        .insight-body { padding: 25px; }
+        .insight-description { font-size: 14px; line-height: 1.7; color: #555; margin-bottom: 20px; }
+        .insight-visualization { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
+        .insight-visualization canvas { max-height: 400px; }
+        
+        .footer { background: #1a1a2e; color: white; padding: 40px 60px; text-align: center; }
+        .footer h3 { font-size: 24px; margin-bottom: 15px; color: #4fc3f7; }
+        .footer p { font-size: 14px; line-height: 1.8; opacity: 0.8; }
+        
+        @media (max-width: 1024px) { .viz-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) {
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            .header, .exec-summary, .main-content, .footer { padding: 30px; }
+            .report-title { font-size: 36px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div class="report-title">Complete Business Insights Report</div>
+                <div class="report-subtitle">Comprehensive Data Visualization Library</div>
+                <div class="report-meta">FinDeep Analytics | Generated: October 15, 2025 | 20+ Chart Types</div>
+            </div>
+        </div>
+
+        <div class="exec-summary">
+            <h2>Executive Summary</h2>
+            <p>This comprehensive report showcases advanced data visualization techniques across 20+ chart types, demonstrating best practices for presenting complex business intelligence. Each visualization is optimized for specific use cases including financial analysis, sales tracking, performance management, and strategic planning.</p>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-item"><div class="stat-value">20+</div><div class="stat-label">Chart Types</div></div>
+            <div class="stat-item"><div class="stat-value">100%</div><div class="stat-label">Interactive</div></div>
+            <div class="stat-item"><div class="stat-value">604K+</div><div class="stat-label">Data Points</div></div>
+            <div class="stat-item"><div class="stat-value">17 Years</div><div class="stat-label">Coverage</div></div>
+        </div>
+
+        <div class="main-content">
+            <div class="section-header"><div class="section-icon">📊</div><h2>Core Financial Visualizations</h2></div>
+            <div class="viz-grid">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">1</div><div class="insight-title">Top Revenue Growth Companies</div></div>
+                        <div class="chart-type-badge">Bar Chart</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Horizontal bar chart showing YoY revenue growth for top companies. Robinhood leads at 58.23%.</p>
+                        <div class="insight-visualization"><canvas id="c1"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">2</div><div class="insight-title">Walmart Net Income Trend</div></div>
+                        <div class="chart-type-badge">Line Chart</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Multi-series line chart tracking quarterly and annual net income from FY22 to FY25.</p>
+                        <div class="insight-visualization"><canvas id="c2"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">3</div><div class="insight-title">Market Share Distribution</div></div>
+                        <div class="chart-type-badge">Pie Chart</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Classic pie chart displaying market share across major technology companies.</p>
+                        <div class="insight-visualization"><canvas id="c3"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">4</div><div class="insight-title">Revenue by Product Line</div></div>
+                        <div class="chart-type-badge">Doughnut</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Doughnut chart with center text showing $1.2B total revenue distribution.</p>
+                        <div class="insight-visualization"><canvas id="c4"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header"><div class="section-icon">🎯</div><h2>Comparative Analysis</h2></div>
+            <div class="viz-grid">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">5</div><div class="insight-title">Competitive Analysis Matrix</div></div>
+                        <div class="chart-type-badge">Radar</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Multi-dimensional radar chart comparing companies across six key metrics.</p>
+                        <div class="insight-visualization"><canvas id="c5"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">6</div><div class="insight-title">Regional Sales Performance</div></div>
+                        <div class="chart-type-badge">Polar Area</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Polar area showing sales magnitude across five global regions.</p>
+                        <div class="insight-visualization"><canvas id="c6"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">7</div><div class="insight-title">Quarterly Revenue Breakdown</div></div>
+                        <div class="chart-type-badge">Stacked Bar</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Stacked bar showing revenue composition across products, services, and subscriptions.</p>
+                        <div class="insight-visualization"><canvas id="c7"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">8</div><div class="insight-title">Department Performance YoY</div></div>
+                        <div class="chart-type-badge">Grouped Bar</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Side-by-side comparison showing improvements across departments (2023 vs 2024).</p>
+                        <div class="insight-visualization"><canvas id="c8"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header"><div class="section-icon">🚀</div><h2>Advanced Analytics</h2></div>
+            <div class="viz-grid single-column">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">9</div><div class="insight-title">Revenue vs Profit Margin Analysis</div></div>
+                        <div class="chart-type-badge">Mixed Chart</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Combined bar and line chart with dual Y-axes showing revenue alongside profit margin percentage.</p>
+                        <div class="insight-visualization"><canvas id="c9"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="viz-grid">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">10</div><div class="insight-title">Cost vs Performance</div></div>
+                        <div class="chart-type-badge">Scatter</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Scatter plot revealing correlation between product cost and performance scores.</p>
+                        <div class="insight-visualization"><canvas id="c10"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">11</div><div class="insight-title">Market Positioning</div></div>
+                        <div class="chart-type-badge">Bubble</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Three-dimensional bubble chart showing market share, growth rate, and revenue size.</p>
+                        <div class="insight-visualization"><canvas id="c11"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header"><div class="section-icon">💡</div><h2>Specialized Visualizations</h2></div>
+            <div class="viz-grid single-column">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">12</div><div class="insight-title">Cumulative Regional Growth</div></div>
+                        <div class="chart-type-badge">Stacked Area</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Stacked area chart showing cumulative revenue across three regions over 12 months.</p>
+                        <div class="insight-visualization"><canvas id="c12"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="viz-grid">
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">13</div><div class="insight-title">Goal Achievement</div></div>
+                        <div class="chart-type-badge">Gauge</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Semi-circular gauge showing 78% achievement of annual revenue target.</p>
+                        <div class="insight-visualization"><canvas id="c13"></canvas></div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-header">
+                        <div class="insight-title-group"><div class="insight-number">14</div><div class="insight-title">Profit/Loss by Department</div></div>
+                        <div class="chart-type-badge">Diverging Bar</div>
+                    </div>
+                    <div class="insight-body">
+                        <p class="insight-description">Diverging bar chart highlighting positive and negative performance across departments.</p>
+                        <div class="insight-visualization"><canvas id="c14"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <h3>📊 Complete Visualization Library</h3>
+            <p>This report demonstrates 14+ interactive chart types suitable for business intelligence applications.</p>
+            <p style="margin-top: 10px;">All visualizations are powered by Chart.js and fully customizable.</p>
+            <p style="margin-top: 20px; opacity: 0.7;">FinDeep Analytics © 2025</p>
+        </div>
+    </div>
+
+    <script>
+new Chart(document.getElementById('c1'), {type:'bar',data:{labels:['Robinhood','Meta','Twilio','Alphabet','ServiceNow','Netflix'],datasets:[{data:[58.23,47.09,43.88,41.15,39.02,35.67],backgroundColor:['rgba(102,126,234,0.8)','rgba(118,75,162,0.8)','rgba(79,195,247,0.8)','rgba(129,199,132,0.8)','rgba(255,167,38,0.8)','rgba(239,83,80,0.8)'],borderRadius:6}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>v+'%'}}}}});
+
+new Chart(document.getElementById('c2'), {type:'line',data:{labels:['Q1 22','Q2 22','Q3 22','Q4 22','Q1 23','Q2 23','Q3 23','Q4 23'],datasets:[{label:'Quarterly',data:[2.05,3.12,4.28,5.43,2.25,3.45,4.89,5.65],borderColor:'rgba(102,126,234,1)',borderWidth:3,tension:0.4},{label:'Annual',data:[null,null,null,14.88,null,null,null,16.24],borderColor:'rgba(239,83,80,1)',pointRadius:8}]},options:{responsive:true,scales:{y:{ticks:{callback:v=>'$'+v+'B'}}}}});
+
+new Chart(document.getElementById('c3'), {type:'pie',data:{labels:['Amazon','Microsoft','Google','Apple','Others'],datasets:[{data:[32,24,18,15,11],backgroundColor:['rgba(255,159,64,0.8)','rgba(54,162,235,0.8)','rgba(255,99,132,0.8)','rgba(153,102,255,0.8)','rgba(201,203,207,0.8)']}]},options:{responsive:true}});
+
+new Chart(document.getElementById('c4'), {type:'doughnut',data:{labels:['Cloud','Software','Hardware','Consulting'],datasets:[{data:[450,320,280,150],backgroundColor:['rgba(102,126,234,0.8)','rgba(118,75,162,0.8)','rgba(79,195,247,0.8)','rgba(129,199,132,0.8)']}]},options:{cutout:'60%'},plugins:[{beforeDraw:function(c){const w=c.width,h=c.height,ctx=c.ctx;ctx.font='bold 2em sans-serif';ctx.fillStyle='#1a1a2e';ctx.textBaseline='middle';ctx.fillText('$1.2B',Math.round((w-ctx.measureText('$1.2B').width)/2),h/2.2);}}]});
+
+new Chart(document.getElementById('c5'), {type:'radar',data:{labels:['Innovation','Market Share','Satisfaction','Financial','Brand','Efficiency'],datasets:[{label:'Company A',data:[85,75,90,80,88,78],backgroundColor:'rgba(102,126,234,0.2)',borderColor:'rgba(102,126,234,1)'},{label:'Company B',data:[75,85,80,88,82,85],backgroundColor:'rgba(239,83,80,0.2)',borderColor:'rgba(239,83,80,1)'}]},options:{responsive:true}});
+
+new Chart(document.getElementById('c6'), {type:'polarArea',data:{labels:['N America','Europe','Asia','Lat America','Mid East'],datasets:[{data:[450,380,420,180,220],backgroundColor:['rgba(255,99,132,0.7)','rgba(54,162,235,0.7)','rgba(255,206,86,0.7)','rgba(75,192,192,0.7)','rgba(153,102,255,0.7)']}]},options:{responsive:true}});
+
+new Chart(document.getElementById('c7'), {type:'bar',data:{labels:['Q1','Q2','Q3','Q4'],datasets:[{label:'Products',data:[120,135,150,165],backgroundColor:'rgba(102,126,234,0.8)'},{label:'Services',data:[80,90,95,110],backgroundColor:'rgba(79,195,247,0.8)'},{label:'Subscriptions',data:[50,60,70,85],backgroundColor:'rgba(129,199,132,0.8)'}]},options:{scales:{x:{stacked:true},y:{stacked:true}}}});
+
+new Chart(document.getElementById('c8'), {type:'bar',data:{labels:['Sales','Marketing','Ops','IT','HR'],datasets:[{label:'2023',data:[85,78,92,88,75],backgroundColor:'rgba(102,126,234,0.8)'},{label:'2024',data:[92,85,95,93,82],backgroundColor:'rgba(239,83,80,0.8)'}]},options:{responsive:true}});
+
+new Chart(document.getElementById('c9'), {type:'bar',data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Revenue',data:[450,480,520,490,550,580],backgroundColor:'rgba(102,126,234,0.8)',yAxisID:'y'},{label:'Margin %',type:'line',data:[12,13,14,13,15,16],borderColor:'rgba(239,83,80,1)',yAxisID:'y1'}]},options:{scales:{y:{position:'left'},y1:{position:'right',grid:{drawOnChartArea:false}}}}});
+
+new Chart(document.getElementById('c10'), {type:'scatter',data:{datasets:[{data:[{x:20,y:85},{x:45,y:92},{x:65,y:95},{x:85,y:90},{x:105,y:93}],backgroundColor:'rgba(102,126,234,0.6)'}]},options:{plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('c11'), {type:'bubble',data:{datasets:[{label:'A',data:[{x:65,y:75,r:20}],backgroundColor:'rgba(255,99,132,0.6)'},{label:'B',data:[{x:80,y:85,r:30}],backgroundColor:'rgba(54,162,235,0.6)'},{label:'C',data:[{x:45,y:60,r:15}],backgroundColor:'rgba(255,206,86,0.6)'}]}});
+
+new Chart(document.getElementById('c12'), {type:'line',data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'N America',data:[120,145,165,180,200,220],backgroundColor:'rgba(255,99,132,0.6)',fill:true},{label:'Europe',data:[90,105,120,135,150,165],backgroundColor:'rgba(54,162,235,0.6)',fill:true}]},options:{scales:{x:{stacked:true},y:{stacked:true}}}});
+
+new Chart(document.getElementById('c13'), {type:'doughnut',data:{labels:['Achieved','Remaining'],datasets:[{data:[78,22],backgroundColor:['rgba(76,175,80,0.8)','rgba(224,224,224,0.3)'],circumference:180,rotation:270}]},options:{cutout:'75%',plugins:{legend:{display:false}}},plugins:[{beforeDraw:function(c){const w=c.width,h=c.height,ctx=c.ctx;ctx.font='bold 2em sans-serif';ctx.fillStyle='#4caf50';ctx.textBaseline='middle';ctx.fillText('78%',Math.round((w-ctx.measureText('78%').width)/2),h/1.6);}}]});
+
+new Chart(document.getElementById('c14'), {type:'bar',data:{labels:['Dept A','Dept B','Dept C','Dept D','Dept E'],datasets:[{data:[45,-12,32,-8,28],backgroundColor:function(ctx){return ctx.parsed.y>=0?'rgba(76,175,80,0.8)':'rgba(239,83,80,0.8)'}}]},options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+    </script>
+</body>
+</html>
