@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinDeep - Plotly Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metadata-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .metadata-label {
+            color: #718096;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .metadata-value {
+            color: #2d3748;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .chart-container h3 {
+            color: #2d3748;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .chart-description {
+            color: #718096;
+            font-size: 0.95em;
+            margin-bottom: 20px;
+        }
+
+        .plotly-chart {
+            min-height: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            padding: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FinDeep</h1>
+            <div class="subtitle">Finance | Corporate Financial Statement Data / SEC Filing Data</div>
+
+            <div class="metadata">
+                <div class="metadata-item">
+                    <div class="metadata-label">Total Insights</div>
+                    <div class="metadata-value">5</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Generated</div>
+                    <div class="metadata-value">2025-10-18 11:19:20</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Visualizations</div>
+                    <div class="metadata-value">5</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="charts">
+            
+            <div class="chart-container">
+                <h3>Execution 4</h3>
+                <p class="chart-description">Visualization from code execution 4</p>
+                <div id="chart_4" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Execution 5</h3>
+                <p class="chart-description">Visualization from code execution 5</p>
+                <div id="chart_5" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Execution 7</h3>
+                <p class="chart-description">Visualization from code execution 7</p>
+                <div id="chart_7" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Execution 9</h3>
+                <p class="chart-description">Visualization from code execution 9</p>
+                <div id="chart_9" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Execution 11</h3>
+                <p class="chart-description">Visualization from code execution 11</p>
+                <div id="chart_11" class="plotly-chart"></div>
+            </div>
+            
+        </div>
+
+        <footer>
+            <p>Generated with Autonomous AI Analyst | Plotly Dashboard</p>
+        </footer>
+    </div>
+
+    <script>
+        
+        Plotly.newPlot('chart_4', [{"x": ["ConocoPhillips", "Uber Technologies", "Chevron", "Tesla", "Pfizer", "Energy Transfer", "Exxon Mobil", "Block", "Qualcomm", "Charles Schwab"], "y": [71.7510538751494, 46.44185626303701, 41.048127586143806, 40.674422011140805, 39.87648251520546, 35.46059675189952, 34.06711032376729, 28.406968749235663, 24.775579649406456, 23.5060951859802], "name": "Average YoY Growth %", "type": "bar", "marker": {"color": "#fa709a", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": "Average YoY Revenue Growth (%)", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "yaxis": {"title": "Company Name", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "hovermode": "closest", "plot_bgcolor": "#fafafa", "paper_bgcolor": "white", "font": {"family": "Segoe UI, Roboto, Arial, sans-serif", "size": 12, "color": "#2c3e50"}, "margin": {"l": 80, "r": 40, "t": 40, "b": 80}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "toImageButtonOptions": {"format": "png", "filename": "chart_4", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_5', [{"x": ["2022", "2023", "2024", "2025"], "y": [-48.775565857649305, 143.97359454855194, 71.27956707689623, 0.0], "name": "ConocoPhillips", "type": "scatter", "mode": "lines+markers", "line": {"color": "#fee140", "width": 3, "shape": "spline"}, "marker": {"color": "#fee140", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}, {"x": ["2022", "2023", "2024", "2025"], "y": [-14.31538461538462, 56.701678786246525, 82.62389000286451, 0.0], "name": "Uber Technologies", "type": "scatter", "mode": "lines+markers", "line": {"color": "#30cfd0", "width": 3, "shape": "spline"}, "marker": {"color": "#30cfd0", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}, {"x": ["2022", "2023", "2024", "2025"], "y": [-35.37088099593218, 71.57204410087441, 51.57233865755701, 0.0], "name": "Chevron", "type": "scatter", "mode": "lines+markers", "line": {"color": "#c471ed", "width": 3, "shape": "spline"}, "marker": {"color": "#c471ed", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": "Fiscal Year", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "yaxis": {"title": "YoY Revenue Growth (%)", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "hovermode": "closest", "plot_bgcolor": "#fafafa", "paper_bgcolor": "white", "font": {"family": "Segoe UI, Roboto, Arial, sans-serif", "size": 12, "color": "#2c3e50"}, "margin": {"l": 80, "r": 40, "t": 40, "b": 80}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "toImageButtonOptions": {"format": "png", "filename": "chart_5", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_7', [{"x": ["Pfizer", "Bank of America", "ConocoPhillips", "Chevron", "Exxon Mobil", "Walmart"], "y": [31.007659995058066, 28.99210110584518, 23.797997299156624, 14.401913486997058, 13.474182943337846, 1.9107165350595219], "name": "Net Income Margin", "type": "bar", "marker": {"color": "#c471ed", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": "Net Income Margin (%)", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "yaxis": {"title": "Company Name", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "hovermode": "closest", "plot_bgcolor": "#fafafa", "paper_bgcolor": "white", "font": {"family": "Segoe UI, Roboto, Arial, sans-serif", "size": 12, "color": "#2c3e50"}, "margin": {"l": 80, "r": 40, "t": 40, "b": 80}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "toImageButtonOptions": {"format": "png", "filename": "chart_7", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_9', [{"x": ["Pharmaceuticals", "Financials", "Energy", "Retail"], "y": [31.007659995058066, 28.99210110584518, 17.22469790983051, 1.9107165350595219], "name": "Average Net Income Margin", "type": "bar", "marker": {"color": "#f093fb", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": "Average Net Income Margin (%)", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "yaxis": {"title": "Sector", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "hovermode": "closest", "plot_bgcolor": "#fafafa", "paper_bgcolor": "white", "font": {"family": "Segoe UI, Roboto, Arial, sans-serif", "size": 12, "color": "#2c3e50"}, "margin": {"l": 80, "r": 40, "t": 40, "b": 80}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "toImageButtonOptions": {"format": "png", "filename": "chart_9", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_11', [{"x": ["2009", "2010", "2011", "2012", "2013", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"], "y": [170.706, 170.407, 180.782, 180.782, 193.406, 203.105, 204.541, 203.49, 199.581, 198.825, 204.522, 219.295, 236.495, 252.496, 244.86, 243.197], "name": "Total Assets", "type": "scatter", "mode": "lines+markers", "line": {"color": "#ef5350", "width": 3, "shape": "spline"}, "marker": {"color": "#ef5350", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": "Fiscal Year", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "yaxis": {"title": "Total Assets (USD Billions)", "showgrid": true, "gridwidth": 1, "gridcolor": "#e0e0e0", "showline": true, "linewidth": 2, "linecolor": "#bdbdbd", "zeroline": true, "zerolinewidth": 2, "zerolinecolor": "#9e9e9e"}, "hovermode": "closest", "plot_bgcolor": "#fafafa", "paper_bgcolor": "white", "font": {"family": "Segoe UI, Roboto, Arial, sans-serif", "size": 12, "color": "#2c3e50"}, "margin": {"l": 80, "r": 40, "t": 40, "b": 80}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "toImageButtonOptions": {"format": "png", "filename": "chart_11", "height": 800, "width": 1200, "scale": 2}});
+        
+    </script>
+</body>
+</html>

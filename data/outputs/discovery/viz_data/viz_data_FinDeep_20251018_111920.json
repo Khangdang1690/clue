@@ -1,0 +1,211 @@
+{
+  "metadata": {
+    "dataset_name": "FinDeep",
+    "total_insights": 5,
+    "generated_date": "2025-10-18 11:19:20",
+    "domain": "Finance",
+    "dataset_type": "Corporate Financial Statement Data / SEC Filing Data",
+    "completed_at": "2025-10-18 11:22:05",
+    "total_visualizations": 5
+  },
+  "visualizations": [
+    {
+      "insight_id": 4,
+      "title": "Execution 4",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "ConocoPhillips",
+          "Uber Technologies",
+          "Chevron",
+          "Tesla",
+          "Pfizer",
+          "Energy Transfer",
+          "Exxon Mobil",
+          "Block",
+          "Qualcomm",
+          "Charles Schwab"
+        ],
+        "x_label": "Average YoY Revenue Growth (%)",
+        "y_label": "Company Name",
+        "datasets": [
+          {
+            "label": "Average YoY Growth %",
+            "data": [
+              71.7510538751494,
+              46.44185626303701,
+              41.048127586143806,
+              40.674422011140805,
+              39.87648251520546,
+              35.46059675189952,
+              34.06711032376729,
+              28.406968749235663,
+              24.775579649406456,
+              23.5060951859802
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 4"
+    },
+    {
+      "insight_id": 5,
+      "title": "Execution 5",
+      "chart_type": "line",
+      "data": {
+        "chart_type": "line",
+        "labels": [
+          "2022",
+          "2023",
+          "2024",
+          "2025"
+        ],
+        "x_label": "Fiscal Year",
+        "y_label": "YoY Revenue Growth (%)",
+        "datasets": [
+          {
+            "label": "ConocoPhillips",
+            "data": [
+              -48.775565857649305,
+              143.97359454855194,
+              71.27956707689623,
+              0.0
+            ]
+          },
+          {
+            "label": "Uber Technologies",
+            "data": [
+              -14.31538461538462,
+              56.701678786246525,
+              82.62389000286451,
+              0.0
+            ]
+          },
+          {
+            "label": "Chevron",
+            "data": [
+              -35.37088099593218,
+              71.57204410087441,
+              51.57233865755701,
+              0.0
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 5"
+    },
+    {
+      "insight_id": 7,
+      "title": "Execution 7",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Pfizer",
+          "Bank of America",
+          "ConocoPhillips",
+          "Chevron",
+          "Exxon Mobil",
+          "Walmart"
+        ],
+        "x_label": "Net Income Margin (%)",
+        "y_label": "Company Name",
+        "datasets": [
+          {
+            "label": "Net Income Margin",
+            "data": [
+              31.007659995058066,
+              28.99210110584518,
+              23.797997299156624,
+              14.401913486997058,
+              13.474182943337846,
+              1.9107165350595219
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 7"
+    },
+    {
+      "insight_id": 9,
+      "title": "Execution 9",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Pharmaceuticals",
+          "Financials",
+          "Energy",
+          "Retail"
+        ],
+        "x_label": "Average Net Income Margin (%)",
+        "y_label": "Sector",
+        "datasets": [
+          {
+            "label": "Average Net Income Margin",
+            "data": [
+              31.007659995058066,
+              28.99210110584518,
+              17.22469790983051,
+              1.9107165350595219
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 9"
+    },
+    {
+      "insight_id": 11,
+      "title": "Execution 11",
+      "chart_type": "line",
+      "data": {
+        "chart_type": "line",
+        "labels": [
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025"
+        ],
+        "x_label": "Fiscal Year",
+        "y_label": "Total Assets (USD Billions)",
+        "datasets": [
+          {
+            "label": "Total Assets",
+            "data": [
+              170.706,
+              170.407,
+              180.782,
+              180.782,
+              193.406,
+              203.105,
+              204.541,
+              203.49,
+              199.581,
+              198.825,
+              204.522,
+              219.295,
+              236.495,
+              252.496,
+              244.86,
+              243.197
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 11"
+    }
+  ]
+}
