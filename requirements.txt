@@ -19,6 +19,27 @@ pydantic>=2.0.0
 python-dotenv>=1.0.0
 
 # ============================================================================
+# DATABASE DEPENDENCIES
+# ============================================================================
+
+# PostgreSQL
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.12.0
+pgvector>=0.2.0        # Vector similarity search
+
+# ============================================================================
+# ETL DEPENDENCIES
+# ============================================================================
+
+# File type detection and encoding
+python-magic-bin>=0.4.14  # Windows compatible version
+chardet>=5.2.0         # Encoding detection
+
+# Embeddings
+google-generativeai>=0.3.0  # For Gemini embeddings
+
+# ============================================================================
 # OPTIONAL DEPENDENCIES (For agent code execution)
 # ============================================================================
 # These libraries are available to the LLM agent when it writes Python code
