@@ -634,12 +634,21 @@ class MultiTableDiscovery:
         if 'specific_columns' in test_rec and 'features' in test_rec['specific_columns']:
             target_cols = test_rec['specific_columns']['features']
         else:
-            # Prioritize key business metrics
+            # Select numeric columns with highest variance (most interesting for anomaly detection)
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-            priority_cols = [col for col in numeric_cols if any(
-                term in col.lower() for term in ['revenue', 'sales', 'profit', 'cost', 'value']
-            )]
-            target_cols = (priority_cols[:2] if priority_cols else numeric_cols[:2])
+            if numeric_cols:
+                # Prioritize columns by variance (normalized by mean to avoid scale bias)
+                col_variance = {}
+                for col in numeric_cols:
+                    if df[col].std() > 0:  # Has variation
+                        # Coefficient of variation (CV) = std / mean
+                        col_variance[col] = df[col].std() / (abs(df[col].mean()) + 1e-10)
+
+                # Sort by variance and take top 2
+                sorted_cols = sorted(col_variance.items(), key=lambda x: x[1], reverse=True)
+                target_cols = [col for col, _ in sorted_cols[:2]] if sorted_cols else numeric_cols[:2]
+            else:
+                target_cols = []
 
         for col_name in target_cols:
             if col_name in df.columns and df[col_name].nunique() > 1:
@@ -778,25 +787,38 @@ class MultiTableDiscovery:
             n_unique_dates = df[date_col].nunique()
 
             if n_unique_dates >= 20:  # Need enough time points
-                # Look for meaningful causal pairs in the data
-                # Priority: marketing/cost -> revenue/sales
-                cause_candidates = []
-                effect_candidates = []
+                # Select column pairs based on statistical properties, not domain keywords
+                # We want pairs with high correlation (potential causal relationship)
 
-                for col in numeric_cols:
-                    col_lower = col.lower()
-                    # Potential causes
-                    if any(term in col_lower for term in ['marketing', 'spend', 'cost', 'price', 'traffic', 'visits']):
-                        cause_candidates.append(col)
-                    # Potential effects
-                    if any(term in col_lower for term in ['revenue', 'sales', 'profit', 'conversion']):
-                        effect_candidates.append(col)
+                if len(numeric_cols) >= 2:
+                    # Compute pairwise correlations
+                    import pandas as pd
+                    corr_pairs = []
+                    for i, col1 in enumerate(numeric_cols):
+                        for col2 in numeric_cols[i+1:]:
+                            try:
+                                corr = df[[col1, col2]].corr().iloc[0, 1]
+                                if abs(corr) > 0.3:  # Moderate correlation threshold
+                                    corr_pairs.append((col1, col2, abs(corr)))
+                            except:
+                                pass
+
+                    # Sort by correlation strength and take top pair
+                    corr_pairs.sort(key=lambda x: x[2], reverse=True)
+
+                    if corr_pairs:
+                        # Test the most correlated pair
+                        cause_col, effect_col, _ = corr_pairs[0]
+                    else:
+                        # No correlations found, just test first two numeric columns
+                        cause_col = numeric_cols[0]
+                        effect_col = numeric_cols[1]
+                else:
+                    cause_col = None
+                    effect_col = None
 
                 # If we found good candidates, test them
-                if cause_candidates and effect_candidates:
-                    # Test the most likely pair
-                    cause_col = cause_candidates[0]
-                    effect_col = effect_candidates[0]
+                if cause_col and effect_col:
 
                     # Aggregate to daily time series if not already
                     ts_data = df.groupby(date_col).agg({

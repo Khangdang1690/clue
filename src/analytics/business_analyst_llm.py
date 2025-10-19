@@ -53,7 +53,7 @@ class BusinessAnalystLLM:
         dataset_info = self._build_dataset_info(datasets)
 
         # Create the prompt for code generation
-        prompt = self._create_analysis_prompt(question, dataset_info)
+        prompt = self._create_analysis_prompt(question, dataset_info, datasets)
 
         previous_codes = []
         previous_errors = []
@@ -73,7 +73,7 @@ class BusinessAnalystLLM:
 
                 if not code:
                     print("[LLM] No code found in response, retrying...")
-                    prompt = self._create_analysis_prompt(question, dataset_info)
+                    prompt = self._create_analysis_prompt(question, dataset_info, datasets)
                     prompt += "\n\nPLEASE PROVIDE CODE IN A ```python CODE BLOCK```"
                     continue
 
@@ -125,7 +125,7 @@ Please write CORRECTED code that:
 - Handles missing data gracefully
 """
                     # Update prompt for retry
-                    prompt = self._create_analysis_prompt(question, dataset_info)
+                    prompt = self._create_analysis_prompt(question, dataset_info, datasets)
                     prompt += error_feedback
                     print(f"[LLM] Execution failed: {execution.error.split(chr(10))[0]}")
                     continue
@@ -161,8 +161,11 @@ Please write CORRECTED code that:
             'success': False
         }
 
-    def _create_analysis_prompt(self, question: str, dataset_info: str) -> str:
+    def _create_analysis_prompt(self, question: str, dataset_info: str, datasets: Dict[str, pd.DataFrame] = None) -> str:
         """Create a prompt for the LLM to generate analysis code."""
+
+        # Generate dynamic example from actual datasets
+        example_code = self._generate_dynamic_example(datasets) if datasets else self._generate_generic_example()
 
         return f"""You are a business analyst. Write Python code to answer this question:
 
@@ -186,44 +189,18 @@ VISUALIZATION RULES:
 - Chart types: 'bar', 'line', 'pie', 'scatter'
 - Example:
   ```python
-  # After calculating top_products
+  # After calculating top_items
   result = {{
       'chart_type': 'bar',
-      'data': top_products['revenue'].tolist(),
-      'labels': top_products['product_name'].tolist(),
-      'title': 'Top 10 Products by Revenue'
+      'data': top_items['value'].tolist(),
+      'labels': top_items['label'].tolist(),
+      'title': 'Top 10 Items'
   }}
   ```
 - The result variable will be automatically saved as visualization data
 
-WORKING EXAMPLE (DO NOT CREATE MOCK DATA):
-```python
-import pandas as pd
-import numpy as np
-
-# DO NOT create any test/mock data - the datasets already exist!
-# Check and analyze the REAL customer data
-if 'customer_profiles' in locals() and 'sales_transactions' in locals():
-    # First calculate revenue per customer
-    customer_revenue = sales_transactions.groupby('customer_id')['net_amount'].sum().reset_index()
-    customer_revenue.columns = ['customer_id', 'total_revenue']
-
-    # Then merge with profiles (DEFINING merged_data variable)
-    merged_data = customer_profiles.merge(customer_revenue, on='customer_id', how='left')
-
-    # Now we can use merged_data (it's been defined above)
-    high_value = merged_data['total_revenue'].quantile(0.8)
-    top_customers = merged_data[merged_data['total_revenue'] >= high_value]
-
-    print(f"FINDING: {{len(top_customers)}} customers are in top 20% by revenue")
-    print(f"FINDING: They generate ${{top_customers['total_revenue'].sum():,.2f}} total")
-elif 'sales_transactions' in locals():
-    # Fallback if only sales data available
-    total_rev = sales_transactions['net_amount'].sum()
-    print(f"FINDING: Total revenue is ${{total_rev:,.2f}}")
-else:
-    print("Required datasets not available")
-```
+WORKING EXAMPLE (using YOUR actual data):
+{example_code}
 
 Write code for: {question}
 
@@ -232,6 +209,104 @@ REMEMBER:
 - Use if/elif/else to handle different data availability
 - Never assume a variable exists - always define it first
 """
+
+    def _generate_dynamic_example(self, datasets: Dict[str, pd.DataFrame]) -> str:
+        """Generate example code using actual dataset names and columns."""
+        if not datasets:
+            return self._generate_generic_example()
+
+        # Get first dataset
+        first_dataset_name = list(datasets.keys())[0]
+        first_df = datasets[first_dataset_name]
+
+        # Find numeric columns
+        numeric_cols = first_df.select_dtypes(include=['number']).columns.tolist()
+
+        # Find categorical/text columns
+        text_cols = first_df.select_dtypes(include=['object']).columns.tolist()
+
+        if len(numeric_cols) > 0 and len(text_cols) > 0:
+            # Example with grouping
+            numeric_col = numeric_cols[0]
+            group_col = text_cols[0]
+
+            example = f"""```python
+import pandas as pd
+import numpy as np
+
+# DO NOT create any test/mock data - the datasets already exist!
+# Analyze the actual {first_dataset_name} dataset
+if '{first_dataset_name}' in locals():
+    # Calculate aggregate statistics
+    grouped = {first_dataset_name}.groupby('{group_col}')['{numeric_col}'].agg(['sum', 'mean', 'count']).reset_index()
+    grouped.columns = ['{group_col}', 'total_{numeric_col}', 'avg_{numeric_col}', 'count']
+
+    # Sort by total and get top 10
+    top_items = grouped.nlargest(10, 'total_{numeric_col}')
+
+    print(f"FINDING: Top 10 {group_col} by {numeric_col}")
+    print(f"FINDING: Total {numeric_col}: {{top_items['total_{numeric_col}'].sum():,.2f}}")
+    print(f"FINDING: Average {numeric_col}: {{top_items['avg_{numeric_col}'].mean():,.2f}}")
+else:
+    print("Dataset not available")
+```"""
+        elif len(numeric_cols) > 0:
+            # Example with numeric analysis only
+            numeric_col = numeric_cols[0]
+
+            example = f"""```python
+import pandas as pd
+import numpy as np
+
+# DO NOT create any test/mock data - the datasets already exist!
+# Analyze the actual {first_dataset_name} dataset
+if '{first_dataset_name}' in locals():
+    # Calculate statistics
+    avg_value = {first_dataset_name}['{numeric_col}'].mean()
+    total_value = {first_dataset_name}['{numeric_col}'].sum()
+    max_value = {first_dataset_name}['{numeric_col}'].max()
+
+    print(f"FINDING: Average {numeric_col}: {{avg_value:,.2f}}")
+    print(f"FINDING: Total {numeric_col}: {{total_value:,.2f}}")
+    print(f"FINDING: Maximum {numeric_col}: {{max_value:,.2f}}")
+else:
+    print("Dataset not available")
+```"""
+        else:
+            # Fallback to basic analysis
+            example = f"""```python
+import pandas as pd
+import numpy as np
+
+# DO NOT create any test/mock data - the datasets already exist!
+# Analyze the actual {first_dataset_name} dataset
+if '{first_dataset_name}' in locals():
+    # Basic dataset analysis
+    row_count = len({first_dataset_name})
+    col_count = len({first_dataset_name}.columns)
+
+    print(f"FINDING: Dataset has {{row_count:,}} rows and {{col_count}} columns")
+    print(f"FINDING: Columns: {{list({first_dataset_name}.columns)}}")
+else:
+    print("Dataset not available")
+```"""
+
+        return example
+
+    def _generate_generic_example(self) -> str:
+        """Generate a generic example when datasets are not available."""
+        return """```python
+import pandas as pd
+import numpy as np
+
+# Check if dataset exists before using it
+if 'your_dataset' in locals():
+    # Analyze the dataset
+    result = your_dataset.describe()
+    print(f"FINDING: Dataset has {len(your_dataset)} rows")
+else:
+    print("Dataset not available")
+```"""
 
     def _build_dataset_info(self, datasets: Dict[str, pd.DataFrame]) -> str:
         """Build information about available datasets."""
@@ -402,32 +477,152 @@ REMEMBER:
         }
 
     def _generate_area_questions(self, area: str, datasets: Dict[str, pd.DataFrame]) -> List[str]:
-        """Generate specific questions for a focus area based on available data."""
+        """Generate specific questions for a focus area based on actual data structure.
+
+        This method analyzes the actual columns and data types to generate relevant questions,
+        without making ANY assumptions about dataset names or business domain.
+        """
 
         questions = []
 
-        if "revenue" in area.lower():
-            if 'sales_transactions' in datasets:
-                questions.append("What are the top 10 revenue-generating customers and what percentage of total revenue do they represent?")
-            if 'sales_daily_metrics' in datasets:
-                questions.append("What is the trend in daily revenue over the last 3 months and what's driving any changes?")
+        # Analyze actual data structure
+        data_capabilities = self._analyze_data_capabilities(datasets)
 
-        elif "customer" in area.lower():
-            if 'customer_profiles' in datasets:
-                questions.append("Which high-value customers (top 20% by revenue) have high churn risk (>70%) and need immediate attention?")
-            if 'sales_transactions' in datasets and 'customer_profiles' in datasets:
-                questions.append("What is the average purchase frequency and order value by customer segment?")
+        # Generate questions based on analytical capabilities, not domain assumptions
+        if "revenue" in area.lower() or "profitability" in area.lower() or "performance" in area.lower():
+            # Focus on numeric aggregations and trends
+            if data_capabilities['numeric_aggregatable']:
+                dataset_name = data_capabilities['numeric_aggregatable'][0]['dataset']
+                numeric_col = data_capabilities['numeric_aggregatable'][0]['numeric_cols'][0]
+                group_col = data_capabilities['numeric_aggregatable'][0]['group_cols'][0]
 
-        elif "product" in area.lower():
-            if 'product_information' in datasets:
-                questions.append("Which products have the highest profit margins and how much revenue do they generate?")
-            if 'sales_transactions' in datasets and 'product_information' in datasets:
-                questions.append("What products are frequently bought together and what's the cross-sell opportunity?")
+                questions.append(f"What are the top performing {group_col} values in {dataset_name} based on {numeric_col}?")
 
-        elif "operational" in area.lower():
-            if 'sales_transactions' in datasets:
-                questions.append("How effective is our discount strategy - what's the impact on revenue and margins?")
-            if 'sales_daily_metrics' in datasets:
-                questions.append("What's the ROI on marketing spend and how has it changed over time?")
+                if data_capabilities['has_time_data']:
+                    questions.append(f"What are the trends and patterns in {numeric_col} over time in the {dataset_name} dataset?")
 
-        return questions if questions else ["Analyze the key metrics and trends in the available data"]
+            elif data_capabilities['numeric_columns']:
+                # Just numeric data without good grouping columns
+                dataset_name = data_capabilities['numeric_columns'][0]['dataset']
+                numeric_col = data_capabilities['numeric_columns'][0]['columns'][0]
+                questions.append(f"What is the distribution and statistical profile of {numeric_col} in {dataset_name}?")
+
+        elif "segment" in area.lower() or "group" in area.lower() or "cluster" in area.lower():
+            # Focus on segmentation and grouping
+            if data_capabilities['numeric_aggregatable']:
+                dataset_name = data_capabilities['numeric_aggregatable'][0]['dataset']
+                group_col = data_capabilities['numeric_aggregatable'][0]['group_cols'][0]
+                questions.append(f"What are the distinct segments in {dataset_name} when grouping by {group_col}?")
+
+                if len(data_capabilities['numeric_aggregatable'][0]['numeric_cols']) > 0:
+                    numeric_col = data_capabilities['numeric_aggregatable'][0]['numeric_cols'][0]
+                    questions.append(f"How do different {group_col} segments compare in terms of {numeric_col}?")
+
+        elif "trend" in area.lower() or "time" in area.lower() or "temporal" in area.lower():
+            # Focus on time-based analysis
+            if data_capabilities['has_time_data']:
+                time_info = data_capabilities['time_data_info'][0]
+                dataset_name = time_info['dataset']
+                time_col = time_info['time_col']
+
+                if time_info['numeric_cols']:
+                    numeric_col = time_info['numeric_cols'][0]
+                    questions.append(f"What are the temporal trends and patterns in {numeric_col} over {time_col} in {dataset_name}?")
+                    questions.append(f"Are there any seasonal or cyclical patterns in the {dataset_name} data?")
+                else:
+                    questions.append(f"What are the temporal patterns and frequencies in {dataset_name} over {time_col}?")
+
+        elif "correlation" in area.lower() or "relationship" in area.lower():
+            # Focus on correlations between variables
+            if data_capabilities['multi_numeric']:
+                dataset_name = data_capabilities['multi_numeric'][0]['dataset']
+                numeric_cols = data_capabilities['multi_numeric'][0]['columns'][:3]  # Take first 3
+                questions.append(f"What are the correlations and relationships between {', '.join(numeric_cols)} in {dataset_name}?")
+
+        elif "distribution" in area.lower() or "statistical" in area.lower():
+            # Focus on statistical distributions
+            if data_capabilities['numeric_columns']:
+                dataset_name = data_capabilities['numeric_columns'][0]['dataset']
+                numeric_cols = data_capabilities['numeric_columns'][0]['columns'][:2]
+                questions.append(f"What are the statistical distributions and outliers in {', '.join(numeric_cols)} from {dataset_name}?")
+
+        # If no questions generated, create generic analytical questions based on capabilities
+        if not questions:
+            if data_capabilities['numeric_aggregatable']:
+                dataset_name = data_capabilities['numeric_aggregatable'][0]['dataset']
+                questions.append(f"What are the key patterns and insights when analyzing {dataset_name} data?")
+            elif data_capabilities['numeric_columns']:
+                dataset_name = data_capabilities['numeric_columns'][0]['dataset']
+                questions.append(f"What is the statistical profile and distribution of numeric values in {dataset_name}?")
+            else:
+                # Fallback to first dataset
+                first_dataset = list(datasets.keys())[0]
+                questions.append(f"What are the key patterns and characteristics in the {first_dataset} dataset?")
+
+        return questions
+
+    def _analyze_data_capabilities(self, datasets: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+        """Analyze what analytical capabilities exist based on actual data structure.
+
+        Returns a dictionary describing what types of analysis are possible:
+        - numeric_columns: Datasets with numeric columns
+        - categorical_columns: Datasets with categorical columns
+        - numeric_aggregatable: Datasets with both numeric and categorical (good for groupby)
+        - has_time_data: Whether time-series analysis is possible
+        - multi_numeric: Datasets with multiple numeric columns (good for correlation)
+        """
+
+        capabilities = {
+            'numeric_columns': [],
+            'categorical_columns': [],
+            'numeric_aggregatable': [],
+            'has_time_data': False,
+            'time_data_info': [],
+            'multi_numeric': []
+        }
+
+        for dataset_name, df in datasets.items():
+            # Identify column types
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+
+            # Numeric columns
+            if numeric_cols:
+                capabilities['numeric_columns'].append({
+                    'dataset': dataset_name,
+                    'columns': numeric_cols
+                })
+
+            # Categorical columns
+            if categorical_cols:
+                capabilities['categorical_columns'].append({
+                    'dataset': dataset_name,
+                    'columns': categorical_cols
+                })
+
+            # Aggregatable (both numeric and categorical)
+            if numeric_cols and categorical_cols:
+                capabilities['numeric_aggregatable'].append({
+                    'dataset': dataset_name,
+                    'numeric_cols': numeric_cols,
+                    'group_cols': categorical_cols
+                })
+
+            # Time data
+            if datetime_cols:
+                capabilities['has_time_data'] = True
+                capabilities['time_data_info'].append({
+                    'dataset': dataset_name,
+                    'time_col': datetime_cols[0],
+                    'numeric_cols': numeric_cols
+                })
+
+            # Multiple numeric columns (for correlation analysis)
+            if len(numeric_cols) >= 2:
+                capabilities['multi_numeric'].append({
+                    'dataset': dataset_name,
+                    'columns': numeric_cols
+                })
+
+        return capabilities

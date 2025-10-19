@@ -156,51 +156,65 @@ class DynamicDataExplorer:
             return f"{type(result).__name__}: {str(result)[:500]}"
 
     def generate_business_questions(self) -> List[str]:
-        """Generate business questions based on available data."""
+        """Generate business questions based on actual data structure without domain assumptions."""
 
         questions = []
 
-        # Check what tables we have
-        has_sales = any('sales' in name or 'transaction' in name for name in self.datasets)
-        has_customers = any('customer' in name or 'client' in name for name in self.datasets)
-        has_products = any('product' in name or 'item' in name for name in self.datasets)
+        if not self.datasets:
+            return ["What insights can we derive from the available data?"]
 
-        if has_sales:
+        # Analyze data capabilities across all datasets
+        has_numeric_data = False
+        has_time_data = False
+        has_categorical_data = False
+        multi_table = len(self.datasets) > 1
+
+        for dataset_name, df in self.datasets.items():
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            time_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+            cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+
+            if numeric_cols:
+                has_numeric_data = True
+            if time_cols:
+                has_time_data = True
+            if cat_cols:
+                has_categorical_data = True
+
+        # Generate generic analytical questions based on data capabilities
+        if has_numeric_data and has_categorical_data:
             questions.extend([
-                "What are the revenue trends over time?",
-                "Which periods show the highest growth?",
-                "Are there seasonal patterns in sales?",
-                "What drives revenue volatility?"
+                "What are the key patterns and segments in the data?",
+                "Which groups show the highest and lowest performance?",
+                "What factors drive the largest differences in outcomes?"
             ])
 
-        if has_customers:
+        if has_time_data and has_numeric_data:
             questions.extend([
-                "Who are our most valuable customers?",
-                "Which customers are at risk of churning?",
-                "What customer segments exist?",
-                "How concentrated is our revenue?"
+                "What are the trends and patterns over time?",
+                "Are there any seasonal or cyclical patterns?",
+                "Which time periods show unusual activity?"
             ])
 
-        if has_products:
+        if has_numeric_data:
             questions.extend([
-                "Which products have the highest profit margins?",
-                "What products are underperforming?",
-                "How does pricing affect sales volume?",
-                "Which categories drive most revenue?"
+                "What is the distribution of key metrics?",
+                "Are there any significant outliers or anomalies?",
+                "What are the strongest correlations in the data?"
             ])
 
-        if has_sales and has_customers:
+        if multi_table:
             questions.extend([
-                "How does customer size affect purchase behavior?",
-                "Which customer segments are growing fastest?",
-                "What's the customer lifetime value distribution?"
+                "How do different datasets relate to each other?",
+                "What insights emerge from cross-dataset analysis?"
             ])
 
-        if has_sales and has_products:
+        # If no specific capabilities detected, return generic questions
+        if not questions:
+            dataset_names = list(self.datasets.keys())
             questions.extend([
-                "Which product combinations are commonly purchased together?",
-                "How effective is our discount strategy?",
-                "What products have the best quality-to-price ratio?"
+                f"What are the key characteristics of the {dataset_names[0]} dataset?",
+                "What patterns and insights exist in the available data?"
             ])
 
         return questions
@@ -224,20 +238,22 @@ AVAILABLE DATASETS:
 OBJECTIVE: {objective}
 
 You can write Python code to analyze the data. All datasets are available as DataFrames with their table names.
-For example, if there's a 'sales_transactions' table, you can access it directly as:
+The datasets variable names match the table names shown above. You can access them directly.
+
+Example pattern (adapt to actual dataset and column names):
 ```python
-# Analyze sales by customer
-customer_sales = sales_transactions.groupby('customer_id')['net_amount'].sum().sort_values(ascending=False)
-print(f"Top 10 customers by revenue:")
-print(customer_sales.head(10))
+# If you have a dataset called 'data_table' with columns 'category' and 'value'
+grouped = data_table.groupby('category')['value'].sum().sort_values(ascending=False)
+print(f"Top 10 {category} by {value}:")
+print(grouped.head(10))
 ```
 
-Based on the data available, generate Python code to answer business questions.
-Focus on:
-1. Identifying revenue drivers
-2. Finding at-risk valuable customers
-3. Discovering growth opportunities
-4. Detecting operational inefficiencies
+Based on the data available, generate Python code to explore and analyze.
+Focus on discovering:
+1. Key patterns and trends in the data
+2. Significant segments or groupings
+3. Unusual patterns or outliers
+4. Relationships between variables
 5. Quantifying business impact
 
 Return your code in ```python``` blocks. After each execution, I'll show you the results and you can explore further.

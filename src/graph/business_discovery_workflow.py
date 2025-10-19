@@ -206,27 +206,29 @@ class BusinessDiscoveryWorkflow:
             # Build context for LLM
             context = self._build_business_context(state)
 
-            prompt = f"""Analyze this business data and identify:
-1. What type of business is this?
-2. What are the key revenue drivers?
-3. What are the main business challenges?
-4. What questions should we explore?
+            prompt = f"""Analyze this data and identify:
+1. What domain or type of analysis does this data represent?
+2. What appear to be the key drivers or important factors?
+3. What are potential areas requiring deeper investigation?
+4. What analytical questions should we explore?
 
 DATA CONTEXT:
 {context}
 
-IMPORTANT: For key_questions, provide simple business questions WITHOUT column names or technical details.
-Good examples:
-- "Which customers generate the most revenue?"
-- "What products have the highest profit margins?"
-- "Which customers are at risk of leaving?"
+IMPORTANT: For key_questions, provide simple analytical questions based ONLY on the actual data structure shown above.
+Do NOT assume any specific business domain (like sales, customers, products, etc.).
 
-Bad examples (avoid these):
+Good examples (adapt to actual data):
+- "Which groups/categories show the highest values?"
+- "What are the trends over time in the key metrics?"
+- "Are there any unusual patterns or outliers?"
+
+Bad examples (avoid assuming column names):
 - "What drives 'churn_risk' in the customer_profiles table?"
 - "How does marketing_spend correlate with revenue?"
 
 Provide a structured analysis in JSON format with keys:
-business_type, revenue_drivers, challenges, key_questions"""
+business_type, key_drivers, challenges, key_questions"""
 
             response = self.model.generate_content(prompt)
             text = response.text
@@ -240,18 +242,21 @@ business_type, revenue_drivers, challenges, key_questions"""
             try:
                 business_context = json.loads(json_str)
             except:
-                # Fallback if JSON parsing fails
+                # Fallback if JSON parsing fails - use generic context
                 business_context = {
-                    'business_type': 'Sales/Retail',
-                    'revenue_drivers': ['Product sales', 'Customer volume'],
-                    'challenges': ['Customer retention', 'Margin optimization'],
+                    'business_type': f'Data Analysis ({len(state["datasets"])} datasets)',
+                    'key_drivers': ['Data patterns', 'Significant trends'],
+                    'challenges': ['Requires deeper analysis'],
                     'key_questions': self.explorer.generate_business_questions()
                 }
 
             state['business_context'] = business_context
 
             print(f"  Business Type: {business_context.get('business_type', 'Unknown')}")
-            print(f"  Revenue Drivers: {', '.join(business_context.get('revenue_drivers', []))}")
+            # Display key drivers (could be revenue_drivers, key_drivers, or other variants from LLM)
+            drivers = business_context.get('key_drivers') or business_context.get('revenue_drivers') or business_context.get('drivers', [])
+            if drivers:
+                print(f"  Key Drivers: {', '.join(drivers)}")
 
         except Exception as e:
             print(f"  [ERROR] Business understanding failed: {e}")
@@ -293,41 +298,8 @@ business_type, revenue_drivers, challenges, key_questions"""
             for i, question in enumerate(questions, 1):
                 print(f"\n  Question {i}: {question[:80]}...")
 
-                # Build exploration prompt with EXPLICIT instructions
-                exploration_prompt = f"""Answer this business question by analyzing the data: {question}
-
-AVAILABLE DATASETS (use these exact names as variables):
-{self._get_dataset_summary(state)}
-
-IMPORTANT RULES:
-1. Write complete, self-contained Python code
-2. Each dataset is already loaded as a DataFrame with its exact name
-3. Do NOT reference undefined variables
-4. Always check if a dataset exists before using it
-5. Print clear findings with numbers
-
-CORRECT EXAMPLE:
-```python
-# Check for high-value customers with churn risk
-if 'customer_profiles' in locals() and 'sales_transactions' in locals():
-    # Calculate revenue by customer
-    customer_revenue = sales_transactions.groupby('customer_id')['net_amount'].sum().reset_index()
-    customer_revenue.columns = ['customer_id', 'total_revenue']
-
-    # Merge with profiles
-    merged_data = customer_profiles.merge(customer_revenue, on='customer_id', how='left')
-
-    # Find high-risk valuable customers - ALWAYS use df['column_name'] syntax!
-    high_risk_customers = merged_data[(merged_data['churn_risk'] > 0.7) & (merged_data['total_revenue'] > 10000)]
-
-    if len(high_risk_customers) > 0:
-        print(f"FINDING: {{len(high_risk_customers)}} high-value customers at risk")
-        print(f"Revenue at risk: ${{high_risk_customers['total_revenue'].sum():,.2f}}")
-else:
-    print("Required datasets not available")
-```
-
-Write code to answer: {question}"""
+                # Note: BusinessAnalystLLM handles code generation with dynamic examples
+                # The hardcoded exploration_prompt was removed because BusinessAnalystLLM generates better prompts
 
                 try:
                     # Use the BusinessAnalystLLM instead of raw model
@@ -918,17 +890,29 @@ Table: {name}
         return '\n'.join(context)
 
     def _basic_business_understanding(self, state: BusinessDiscoveryState) -> Dict:
-        """Basic business understanding without LLM."""
+        """Basic business understanding without LLM - domain-agnostic."""
 
-        # Analyze what we have
-        has_sales = any('sales' in name or 'transaction' in name for name in state['datasets'])
-        has_customers = any('customer' in name for name in state['datasets'])
-        has_products = any('product' in name for name in state['datasets'])
+        # Analyze data structure without assuming domain
+        dataset_count = len(state['datasets'])
+        total_rows = sum(len(df) for df in state['datasets'].values())
+
+        # Identify data characteristics
+        has_numeric_data = any(
+            len(df.select_dtypes(include=['number']).columns) > 0
+            for df in state['datasets'].values()
+        )
+        has_time_data = any(
+            len(df.select_dtypes(include=['datetime64']).columns) > 0
+            for df in state['datasets'].values()
+        )
 
         return {
-            'business_type': 'Sales/Commerce',
-            'revenue_drivers': ['Sales transactions'] if has_sales else [],
-            'challenges': ['Unknown'],
+            'business_type': f'Data Analysis ({dataset_count} datasets, {total_rows} total rows)',
+            'data_characteristics': {
+                'has_numeric_data': has_numeric_data,
+                'has_time_series': has_time_data
+            },
+            'challenges': ['Requires deeper analysis to understand domain'],
             'key_questions': self.explorer.generate_business_questions()
         }
 
@@ -1001,31 +985,43 @@ if len(numeric_cols) > 0:
 
         recommendations = []
 
-        # Basic recommendation based on insight type
+        # Generic recommendations based on analytical patterns, not domain keywords
         finding = insight.get('finding', '').lower()
 
-        if 'customer' in finding and ('high' in finding or 'top' in finding):
+        # Pattern: High value/top performers
+        if ('high' in finding or 'top' in finding) and ('value' in finding or 'perform' in finding):
             recommendations.append({
-                'action': 'Focus retention efforts on high-value customers identified',
+                'action': 'Focus efforts on maintaining and expanding top performers identified',
                 'rationale': insight['finding'],
                 'impact': 'High',
                 'urgency': 'Medium'
             })
 
-        if 'revenue' in finding and ('decline' in finding or 'decrease' in finding):
+        # Pattern: Decline or negative trend
+        if 'decline' in finding or 'decrease' in finding or 'drop' in finding:
             recommendations.append({
-                'action': 'Investigate and address revenue decline immediately',
+                'action': 'Investigate root causes of decline and develop corrective action plan',
                 'rationale': insight['finding'],
                 'impact': 'High',
                 'urgency': 'High'
             })
 
-        if 'product' in finding and 'margin' in finding:
+        # Pattern: Opportunity or growth
+        if 'opportunit' in finding or 'grow' in finding or 'increas' in finding:
             recommendations.append({
-                'action': 'Optimize product mix to focus on high-margin items',
+                'action': 'Develop strategy to capitalize on growth opportunity identified',
                 'rationale': insight['finding'],
                 'impact': 'Medium',
-                'urgency': 'Low'
+                'urgency': 'Medium'
+            })
+
+        # Pattern: Risk or anomaly
+        if 'risk' in finding or 'anomal' in finding or 'unusual' in finding:
+            recommendations.append({
+                'action': 'Monitor and mitigate identified risks through targeted interventions',
+                'rationale': insight['finding'],
+                'impact': 'High',
+                'urgency': 'High'
             })
 
         return recommendations
