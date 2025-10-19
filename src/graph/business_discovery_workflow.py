@@ -10,6 +10,12 @@ from src.database.connection import DatabaseManager
 from src.database.repository import DatasetRepository, CompanyRepository
 from src.analytics.dynamic_explorer import DynamicDataExplorer
 from src.discovery.multi_table_executor import MultiTableCodeExecutor
+from src.discovery.visualization_data_store import VisualizationDataStore
+from src.discovery.plotly_dashboard_generator import PlotlyDashboardGenerator
+from src.analytics.anomaly_detection import AnomalyDetector
+from src.analytics.forecasting import TimeSeriesForecaster
+from src.analytics.causal_inference import CausalAnalyzer
+from src.analytics.variance_decomposition import VarianceDecomposer
 import google.generativeai as genai
 
 
@@ -21,10 +27,14 @@ class BusinessDiscoveryState(Dict):
     metadata: Dict[str, Any]
     business_context: Dict[str, Any]
     exploration_results: Dict[str, Any]
+    analytics_results: Dict[str, Any]  # Results from advanced analytics
     insights: List[Dict[str, Any]]
+    synthesized_insights: List[Dict[str, Any]]  # LLM-synthesized narratives
     recommendations: List[Dict[str, Any]]
     executive_summary: str
     report_path: Optional[str]
+    viz_data_path: Optional[str]  # Path to viz_data JSON
+    dashboard_path: Optional[str]  # Path to Plotly dashboard HTML
     status: str
     error: Optional[str]
 
@@ -48,6 +58,16 @@ class BusinessDiscoveryWorkflow:
         else:
             self.model = None
 
+        # Initialize visualization components
+        self.viz_data_store = None  # Will be initialized per run
+        self.dashboard_generator = PlotlyDashboardGenerator()
+
+        # Initialize analytics components
+        self.anomaly_detector = AnomalyDetector()
+        self.forecaster = TimeSeriesForecaster()
+        self.causal_analyzer = CausalAnalyzer()
+        self.variance_decomposer = VarianceDecomposer()
+
         # Build workflow
         self.graph = self._build_workflow()
 
@@ -60,7 +80,9 @@ class BusinessDiscoveryWorkflow:
         workflow.add_node("load_data", self._load_data_node)
         workflow.add_node("understand_business", self._understand_business_node)
         workflow.add_node("explore_dynamically", self._explore_dynamically_node)
+        workflow.add_node("run_analytics", self._run_advanced_analytics_node)
         workflow.add_node("generate_insights", self._generate_insights_node)
+        workflow.add_node("synthesize_insights", self._synthesize_insights_node)
         workflow.add_node("create_recommendations", self._create_recommendations_node)
         workflow.add_node("generate_report", self._generate_report_node)
 
@@ -68,8 +90,10 @@ class BusinessDiscoveryWorkflow:
         workflow.set_entry_point("load_data")
         workflow.add_edge("load_data", "understand_business")
         workflow.add_edge("understand_business", "explore_dynamically")
-        workflow.add_edge("explore_dynamically", "generate_insights")
-        workflow.add_edge("generate_insights", "create_recommendations")
+        workflow.add_edge("explore_dynamically", "run_analytics")
+        workflow.add_edge("run_analytics", "generate_insights")
+        workflow.add_edge("generate_insights", "synthesize_insights")
+        workflow.add_edge("synthesize_insights", "create_recommendations")
         workflow.add_edge("create_recommendations", "generate_report")
         workflow.add_edge("generate_report", END)
 
@@ -126,6 +150,18 @@ class BusinessDiscoveryWorkflow:
 
             for name, df in datasets.items():
                 print(f"  [OK] {name}: {df.shape[0]:,} rows x {df.shape[1]} columns")
+
+            # Initialize visualization data store for this analysis
+            company_name = state.get('company_name', 'unknown_company')
+            self.viz_data_store = VisualizationDataStore(
+                dataset_name=f"business_discovery_{company_name}",
+                dataset_context={
+                    'company_id': state['company_id'],
+                    'datasets': list(datasets.keys()),
+                    'analysis_type': 'business_discovery'
+                }
+            )
+            state['viz_data_path'] = str(self.viz_data_store.json_path)
 
             # Load relationships
             with DatabaseManager.get_session() as session:
@@ -299,7 +335,8 @@ Write code to answer: {question}"""
                     result = self.business_analyst.analyze_business_question(
                         question=question,
                         datasets=state['datasets'],
-                        max_attempts=2
+                        max_attempts=2,
+                        viz_data_store=self.viz_data_store
                     )
 
                     if result['success']:
@@ -375,39 +412,432 @@ Write code to answer: {question}"""
 
         return state
 
-    def _generate_insights_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
-        """Generate business insights from exploration results."""
+    def _run_advanced_analytics_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
+        """Run advanced analytics modules on the datasets."""
 
-        print("\n[STEP 4] Generating Business Insights")
+        print("\n[STEP 4] Running Advanced Analytics")
         print("-" * 40)
 
-        raw_insights = state['exploration_results'].get('raw_insights', [])
+        analytics_results = {}
 
-        if not raw_insights:
-            print("  No insights discovered")
-            return state
+        try:
+            datasets = state['datasets']
 
-        # Convert raw insights to business insights
-        business_insights = []
+            # 1. Anomaly Detection
+            print("\n  Running Anomaly Detection...")
+            anomaly_detector = AnomalyDetector()
+            anomaly_results = []
 
-        for raw in raw_insights:
-            insight = self._convert_to_business_insight(raw)
-            if insight:
-                business_insights.append(insight)
-                print(f"  [OK] {insight['title']}")
+            for table_name, df in datasets.items():
+                # Find numeric columns for anomaly detection
+                numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
 
-        state['insights'] = business_insights
-        print(f"\n  Generated {len(business_insights)} business insights")
+                for col in numeric_cols:
+                    if len(df[col].dropna()) > 10:  # Need enough data points
+                        try:
+                            result = anomaly_detector.detect_anomalies(
+                                df[col],
+                                dataset_name=f"{table_name}.{col}"
+                            )
+                            if result and result.results and result.results.get('anomalies'):
+                                anomalies = result.results['anomalies']
+                                if len(anomalies) > 0:
+                                    anomaly_results.append({
+                                        'table': table_name,
+                                        'column': col,
+                                        'num_anomalies': len(anomalies),
+                                        'anomaly_rate': result.results.get('anomaly_rate', 0),
+                                        'detection_method': result.results.get('detection_method', 'unknown'),
+                                        'anomalies_sample': anomalies[:5]  # First 5 anomalies
+                                    })
+                                    print(f"    [OK] Found {len(anomalies)} anomalies in {table_name}.{col}")
+                        except Exception as e:
+                            print(f"    [WARN] Anomaly detection failed for {table_name}.{col}: {str(e)[:50]}")
+
+            analytics_results['anomalies'] = anomaly_results
+
+            # 2. Time Series Forecasting
+            print("\n  Running Time Series Analysis...")
+            forecaster = TimeSeriesForecaster()
+            forecast_results = []
+
+            for table_name, df in datasets.items():
+                # Look for date/time columns
+                date_cols = df.select_dtypes(include=['datetime64', 'object']).columns
+
+                for date_col in date_cols:
+                    # Try to parse as datetime if string
+                    try:
+                        if df[date_col].dtype == 'object':
+                            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+
+                        if df[date_col].dtype != 'object' and pd.api.types.is_datetime64_any_dtype(df[date_col]):
+                            # Found a date column, look for metrics to forecast
+                            numeric_cols = df.select_dtypes(include=['number']).columns
+
+                            for metric_col in numeric_cols:
+                                if len(df[metric_col].dropna()) > 20:  # Need enough history
+                                    try:
+                                        # Create clean data without NaN values
+                                        clean_df = df[[date_col, metric_col]].dropna()
+
+                                        # Aggregate by date if needed
+                                        if len(clean_df) > 0:
+                                            ts_data = clean_df.groupby(clean_df[date_col].dt.date)[metric_col].sum()
+                                        else:
+                                            continue
+
+                                        if len(ts_data) > 10:
+                                            # Pass as Series with datetime index
+                                            result = forecaster.forecast(
+                                                data=ts_data,
+                                                periods=7,
+                                                dataset_name=f"{table_name}.{metric_col}"
+                                            )
+                                            if result and result.results and result.results.get('predictions'):
+                                                forecast_results.append({
+                                                    'table': table_name,
+                                                    'metric': metric_col,
+                                                    'date_column': date_col,
+                                                    'forecast_periods': result.results.get('forecast_horizon', 7),
+                                                    'forecast_values': result.results['predictions'],
+                                                    'timestamps': result.results.get('timestamps', []),
+                                                    'model_name': result.results.get('model_name', 'unknown')
+                                                })
+                                                print(f"    [OK] Generated 7-day forecast for {table_name}.{metric_col}")
+                                    except Exception as e:
+                                        print(f"    [WARN] Forecasting failed for {table_name}.{metric_col}: {str(e)[:50]}")
+                    except:
+                        continue
+
+            analytics_results['forecasts'] = forecast_results
+
+            # 3. Causal Analysis
+            print("\n  Running Causal Analysis...")
+            causal_analyzer = CausalAnalyzer()
+            causal_results = []
+
+            # Look for potential cause-effect relationships
+            for table_name, df in datasets.items():
+                numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+
+                if len(numeric_cols) >= 2:
+                    # Test relationships between numeric columns
+                    for i, col1 in enumerate(numeric_cols):
+                        for col2 in numeric_cols[i+1:]:
+                            if len(df[col1].dropna()) > 10 and len(df[col2].dropna()) > 10:
+                                try:
+                                    # Use analyze_causality method
+                                    result = causal_analyzer.analyze_causality(
+                                        cause=df[col1],
+                                        effect=df[col2],
+                                        dataset_name=f"{table_name}"
+                                    )
+                                    if result and result.results and result.results.get('relationships'):
+                                        # Check if any significant relationships found
+                                        for rel in result.results['relationships']:
+                                            if rel.get('is_significant', False):
+                                                causal_results.append({
+                                                    'table': table_name,
+                                                    'cause': col1,
+                                                    'effect': col2,
+                                                    'p_value': rel.get('p_value', 1.0),
+                                                    'strength': rel.get('strength', 'unknown'),
+                                                    'is_significant': True
+                                                })
+                                                print(f"    [OK] Found causal relationship: {col1} -> {col2} (strength={rel.get('strength', 'unknown')})")
+                                                break
+                                except Exception as e:
+                                    continue
+
+            analytics_results['causal_relationships'] = causal_results
+
+            # 4. Variance Decomposition (for metrics with categories)
+            print("\n  Running Variance Decomposition...")
+            variance_decomposer = VarianceDecomposer()
+            variance_results = []
+
+            for table_name, df in datasets.items():
+                numeric_cols = df.select_dtypes(include=['number']).columns
+                categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+
+                for metric in numeric_cols:
+                    for category in categorical_cols:
+                        if df[category].nunique() < 20 and len(df[metric].dropna()) > 10:  # Reasonable number of categories
+                            try:
+                                # Create X (features) and y (target)
+                                X = pd.get_dummies(df[[category]], drop_first=True)
+                                y = df[metric]
+
+                                # Remove NaN values
+                                mask = ~y.isna()
+                                X_clean = X[mask]
+                                y_clean = y[mask]
+
+                                if len(y_clean) > 10:
+                                    result = variance_decomposer.decompose(
+                                        X=X_clean,
+                                        y=y_clean,
+                                        dataset_name=f"{table_name}",
+                                        feature_names=[category]
+                                    )
+                                    if result and result.results and result.results.get('feature_contributions'):
+                                        total_variance = result.results.get('total_variance_explained', 0)
+                                        if total_variance > 0:
+                                            variance_results.append({
+                                                'table': table_name,
+                                                'metric': metric,
+                                                'factor': category,
+                                                'variance_explained': float(total_variance),
+                                                'contributions': result.results['feature_contributions'][:5]  # Top 5 contributions
+                                            })
+                                            print(f"    [OK] {category} explains {total_variance:.1%} of {metric} variance")
+                            except Exception as e:
+                                continue
+
+            analytics_results['variance_decomposition'] = variance_results
+
+            # Store results in state
+            state['analytics_results'] = analytics_results
+
+            # Summary
+            print(f"\n  Analytics Summary:")
+            print(f"    - Anomalies detected: {len(anomaly_results)}")
+            print(f"    - Forecasts generated: {len(forecast_results)}")
+            print(f"    - Causal relationships: {len(causal_results)}")
+            print(f"    - Variance analyses: {len(variance_results)}")
+
+        except Exception as e:
+            import traceback
+            print(f"  [ERROR] Advanced analytics failed: {e}")
+            print(f"  [DEBUG] Traceback: {traceback.format_exc()[:500]}")
+            state['analytics_results'] = {}
 
         return state
 
-    def _create_recommendations_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
-        """Create actionable recommendations from insights."""
+    def _generate_insights_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
+        """Generate business insights from exploration and analytics results."""
 
-        print("\n[STEP 5] Creating Recommendations")
+        print("\n[STEP 5] Generating Business Insights")
+        print("-" * 40)
+
+        raw_insights = state['exploration_results'].get('raw_insights', [])
+        analytics_results = state.get('analytics_results', {})
+
+        # Combine insights from exploration and analytics
+        all_insights = []
+
+        # Process exploration insights
+        for raw in raw_insights:
+            insight = self._convert_to_business_insight(raw)
+            if insight:
+                all_insights.append(insight)
+
+        # Process analytics insights
+        if analytics_results:
+            # Anomaly insights
+            for anomaly in analytics_results.get('anomalies', []):
+                if anomaly['num_anomalies'] > 0:
+                    finding = f"Found {anomaly['num_anomalies']} unusual values in {anomaly['table']}.{anomaly['column']} that may indicate data quality issues or exceptional business events"
+                    all_insights.append({
+                        'title': f"Anomalies Detected in {anomaly['table']}.{anomaly['column']}",
+                        'finding': finding,
+                        'description': finding,
+                        'evidence': anomaly,
+                        'category': 'anomaly',
+                        'impact': 'medium',
+                        'type': 'analytics'
+                    })
+
+            # Forecast insights
+            for forecast in analytics_results.get('forecasts', []):
+                if forecast.get('forecast_values'):
+                    finding = f"Projected trends for {forecast['metric']} based on historical patterns in {forecast['table']}"
+                    all_insights.append({
+                        'title': f"7-Day Forecast for {forecast['metric']}",
+                        'finding': finding,
+                        'description': finding,
+                        'evidence': forecast,
+                        'category': 'forecast',
+                        'impact': 'high',
+                        'type': 'analytics'
+                    })
+
+            # Causal insights
+            for causal in analytics_results.get('causal_relationships', []):
+                if causal.get('is_significant', False):
+                    finding = f"Statistical analysis reveals a {causal.get('strength', 'significant')} causal relationship between {causal['cause']} and {causal['effect']} (p-value: {causal.get('p_value', 0):.4f})"
+                    all_insights.append({
+                        'title': f"Significant relationship: {causal['cause']} -> {causal['effect']}",
+                        'finding': finding,
+                        'description': finding,
+                        'evidence': causal,
+                        'category': 'relationship',
+                        'impact': 'high' if causal.get('strength') == 'strong' else 'medium',
+                        'type': 'analytics'
+                    })
+
+            # Variance insights
+            for variance in analytics_results.get('variance_decomposition', []):
+                if variance['variance_explained'] > 0.2:  # Explains >20% of variance
+                    finding = f"{variance['factor']} explains {variance['variance_explained']:.1%} of the variance in {variance['metric']}"
+                    all_insights.append({
+                        'title': f"{variance['factor']} drives {variance['metric']} variation",
+                        'finding': finding,
+                        'description': finding,
+                        'evidence': variance,
+                        'category': 'driver',
+                        'impact': 'high' if variance['variance_explained'] > 0.5 else 'medium',
+                        'type': 'analytics'
+                    })
+
+        if all_insights:
+            print(f"  [OK] Generated {len(all_insights)} insights")
+            for insight in all_insights:
+                print(f"    - {insight['title']}")
+        else:
+            print("  No insights discovered")
+
+        state['insights'] = all_insights
+        return state
+
+    def _synthesize_insights_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
+        """Synthesize insights into meaningful business narratives using LLM."""
+
+        print("\n[STEP 6] Synthesizing Business Narratives")
         print("-" * 40)
 
         insights = state['insights']
+        analytics = state.get('analytics_results', {})
+        business_context = state['business_context']
+
+        if not insights:
+            print("  No insights to synthesize")
+            state['synthesized_insights'] = []
+            return state
+
+        # Prepare insights summary for LLM
+        insights_summary = self._prepare_insights_for_synthesis(insights, analytics)
+
+        # Use LLM to synthesize narratives
+        synthesis_prompt = f"""You are a senior business analyst reviewing analysis results for a {business_context.get('business_type', 'company')}.
+
+RAW INSIGHTS AND DATA:
+{insights_summary}
+
+YOUR TASK:
+Read all the insights and data above. Create 3-5 HIGH-VALUE BUSINESS NARRATIVES that:
+1. CONNECT multiple data points into a coherent story
+2. Identify ROOT CAUSES and RELATIONSHIPS between different findings
+3. Provide ACTIONABLE BUSINESS IMPLICATIONS
+4. Focus on what matters most to business outcomes
+
+DO NOT just repeat the raw stats. Instead, SYNTHESIZE them into insights that answer "SO WHAT?" and "WHY DOES THIS MATTER?"
+
+EXAMPLE OF GOOD SYNTHESIS:
+Instead of:
+- "307 customers have high churn risk"
+- "High churn customers are in Tech and Retail"
+- "High churn customers have low engagement"
+
+Write:
+"CRITICAL CHURN RISK PATTERN: 61% of our customer base (307 companies) shows high churn risk, concentrated heavily in Tech (31%) and Retail (21%) industries. These at-risk customers exhibit significantly lower engagement scores (18 vs 71 for healthy customers) and lower lifetime value ($17K vs $95K). This pattern suggests our product-market fit is weakening specifically in Tech and Retail sectors, likely due to insufficient industry-specific engagement strategies. Immediate action needed to prevent ~$5.2M revenue loss."
+
+For each narrative, provide:
+1. TITLE: Concise, action-oriented title
+2. NARRATIVE: The synthesized story (2-4 sentences) connecting multiple data points
+3. BUSINESS_IMPACT: What this means for the business (revenue, growth, risk)
+4. PRIORITY: High/Medium/Low based on urgency and impact
+
+Return your response as a JSON array:
+```json
+[
+  {{
+    "title": "...",
+    "narrative": "...",
+    "business_impact": "...",
+    "priority": "High/Medium/Low",
+    "connected_insights": ["insight_title_1", "insight_title_2"]
+  }}
+]
+```
+"""
+
+        try:
+            response = self.business_analyst.model.generate_content(synthesis_prompt)
+            synthesized = self._parse_synthesis_response(response.text)
+
+            if synthesized:
+                print(f"  [OK] Created {len(synthesized)} synthesized narratives")
+                for syn in synthesized:
+                    print(f"    [{syn.get('priority', 'Medium')}] {syn['title']}")
+            else:
+                print("  [WARN] LLM synthesis failed, using raw insights")
+                synthesized = insights  # Fallback to raw insights
+
+            state['synthesized_insights'] = synthesized
+
+        except Exception as e:
+            print(f"  [ERROR] Synthesis failed: {str(e)[:100]}")
+            print("  Using raw insights as fallback")
+            state['synthesized_insights'] = insights
+
+        return state
+
+    def _prepare_insights_for_synthesis(self, insights: List[Dict], analytics: Dict) -> str:
+        """Prepare insights summary for LLM synthesis."""
+
+        summary_parts = []
+
+        # Group insights by category
+        exploration_insights = [i for i in insights if i.get('type') == 'discovery']
+        analytics_insights = [i for i in insights if i.get('type') == 'analytics']
+
+        if exploration_insights:
+            summary_parts.append("EXPLORATION FINDINGS:")
+            for insight in exploration_insights:
+                summary_parts.append(f"- {insight['title']}: {insight['finding'][:200]}")
+
+        if analytics_insights:
+            summary_parts.append("\nANALYTICS FINDINGS:")
+            for insight in analytics_insights:
+                summary_parts.append(f"- {insight['title']}: {insight['finding'][:200]}")
+
+        if analytics:
+            summary_parts.append(f"\nANALYTICS SUMMARY:")
+            summary_parts.append(f"- Anomalies detected: {len(analytics.get('anomalies', []))}")
+            summary_parts.append(f"- Causal relationships: {len(analytics.get('causal_relationships', []))}")
+            summary_parts.append(f"- Variance analyses: {len(analytics.get('variance_decomposition', []))}")
+
+        return "\n".join(summary_parts)
+
+    def _parse_synthesis_response(self, response_text: str) -> List[Dict]:
+        """Parse LLM synthesis response."""
+        import re
+        import json
+
+        # Try to extract JSON from response
+        json_match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1))
+            except:
+                pass
+
+        # Try to parse as raw JSON
+        try:
+            return json.loads(response_text)
+        except:
+            return []
+
+    def _create_recommendations_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
+        """Create actionable recommendations from synthesized insights."""
+
+        print("\n[STEP 7] Creating Recommendations")
+        print("-" * 40)
+
+        # Use synthesized insights if available, otherwise fall back to raw insights
+        insights = state.get('synthesized_insights', state.get('insights', []))
         if not insights:
             print("  No insights to base recommendations on")
             return state
@@ -433,7 +863,7 @@ Write code to answer: {question}"""
     def _generate_report_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
         """Generate the final business report."""
 
-        print("\n[STEP 6] Generating Business Report")
+        print("\n[STEP 8] Generating Business Report")
         print("-" * 40)
 
         # Create report directory
@@ -455,6 +885,18 @@ Write code to answer: {question}"""
         state['status'] = 'completed'
 
         print(f"  [OK] Report saved: {report_path}")
+
+        # Generate Plotly dashboard if viz_data was created
+        if state.get('viz_data_path') and self.viz_data_store:
+            try:
+                dashboard_path = self.dashboard_generator.generate_dashboard(
+                    viz_data_json_path=state['viz_data_path'],
+                    output_path=None  # Will auto-generate path
+                )
+                state['dashboard_path'] = dashboard_path
+                print(f"  [OK] Dashboard generated: {dashboard_path}")
+            except Exception as e:
+                print(f"  [WARN] Dashboard generation failed: {e}")
 
         return state
 
@@ -589,7 +1031,7 @@ if len(numeric_cols) > 0:
         return recommendations
 
     def _generate_executive_summary(self, state: BusinessDiscoveryState) -> str:
-        """Generate executive summary."""
+        """Generate executive summary from synthesized insights."""
 
         summary = ["# Executive Summary\n"]
 
@@ -598,39 +1040,62 @@ if len(numeric_cols) > 0:
         summary.append(f"**Business Type:** {context.get('business_type', 'Unknown')}\n")
         summary.append(f"**Analysis Date:** {datetime.now().strftime('%B %d, %Y')}\n")
 
-        # Key findings
-        if state['insights']:
-            summary.append("\n## Key Findings\n")
-            for insight in state['insights'][:5]:
-                summary.append(f"• {insight['finding']}")
+        # Use synthesized insights if available
+        insights = state.get('synthesized_insights', state.get('insights', []))
+
+        # Key narratives (synthesized insights)
+        if insights:
+            summary.append("\n## Key Business Narratives\n")
+            for insight in insights[:5]:
+                # Check if this is a synthesized insight with narrative
+                if 'narrative' in insight:
+                    priority = insight.get('priority', 'Medium')
+                    summary.append(f"**[{priority}] {insight['title']}**\n")
+                    summary.append(f"{insight['narrative']}\n")
+                else:
+                    # Fall back to raw insight format
+                    summary.append(f"• {insight.get('finding', insight.get('title', 'N/A'))}\n")
 
         # Top recommendations
         if state['recommendations']:
             summary.append("\n## Priority Actions\n")
             for rec in state['recommendations'][:3]:
-                summary.append(f"• {rec['action']}")
+                summary.append(f"• {rec['action']}\n")
 
         return '\n'.join(summary)
 
     def _write_business_report(self, state: BusinessDiscoveryState, report_path: str):
-        """Write the business report."""
+        """Write the business report with synthesized narratives."""
 
         with open(report_path, 'w') as f:
             f.write(state['executive_summary'])
 
             f.write("\n\n## Detailed Analysis\n")
 
-            # Insights section
-            f.write("\n### Business Insights\n")
-            for i, insight in enumerate(state['insights'], 1):
-                f.write(f"\n{i}. **{insight['title']}**\n")
-                f.write(f"   - Finding: {insight['finding']}\n")
+            # Use synthesized insights if available
+            insights = state.get('synthesized_insights', state.get('insights', []))
+
+            # Business Narratives section (synthesized insights)
+            f.write("\n### Business Narratives\n")
+            for i, insight in enumerate(insights, 1):
+                if 'narrative' in insight:
+                    # Synthesized insight format
+                    priority = insight.get('priority', 'Medium')
+                    f.write(f"\n{i}. **[{priority}] {insight['title']}**\n\n")
+                    f.write(f"{insight['narrative']}\n\n")
+                    if 'business_impact' in insight:
+                        f.write(f"**Business Impact:** {insight['business_impact']}\n")
+                else:
+                    # Fall back to raw insight format
+                    f.write(f"\n{i}. **{insight['title']}**\n")
+                    f.write(f"   - {insight.get('finding', insight.get('description', 'N/A'))}\n")
 
             # Recommendations section
             f.write("\n### Recommendations\n")
             for i, rec in enumerate(state['recommendations'], 1):
                 f.write(f"\n{i}. **{rec['action']}**\n")
-                f.write(f"   - Rationale: {rec['rationale']}\n")
+                if 'rationale' in rec:
+                    f.write(f"   - Rationale: {rec['rationale']}\n")
                 f.write(f"   - Impact: {rec.get('impact', 'Unknown')}\n")
 
             # Data analyzed section

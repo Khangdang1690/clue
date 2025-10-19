@@ -83,11 +83,12 @@ class PlotlyDashboardGenerator:
         plotly_scripts = []
 
         for idx, viz in enumerate(visualizations, 1):
-            insight_id = viz.get("insight_id", idx)
-            title = viz.get("title", f"Insight {insight_id}")
+            viz_id = viz.get("viz_id", viz.get("insight_id", idx))  # Support both old (insight_id) and new (viz_id) format
+            title = viz.get("title", f"Visualization {viz_id}")
             chart_type = viz.get("chart_type", "line")
             data = viz.get("data", {})
             description = viz.get("description", "")
+            question = viz.get("question", "")  # Business question this viz answers
 
             # Create chart div with clean, professional structure + chart type selector + color picker
             chart_div = f'''
@@ -96,13 +97,13 @@ class PlotlyDashboardGenerator:
                     <div class="chart-title-row">
                         <h3>{title}</h3>
                         <div class="chart-controls">
-                            <select class="chart-type-selector" onchange="changeChartType('{insight_id}', this.value)" data-default="{chart_type}">
+                            <select class="chart-type-selector" onchange="changeChartType('{viz_id}', this.value)" data-default="{chart_type}">
                                 <option value="bar" {"selected" if chart_type == "bar" else ""}>Bar Chart</option>
                                 <option value="line" {"selected" if chart_type == "line" else ""}>Line Chart</option>
                                 <option value="scatter" {"selected" if chart_type == "scatter" else ""}>Scatter Plot</option>
                                 <option value="area" {"selected" if chart_type == "area" else ""}>Area Chart</option>
                             </select>
-                            <select class="color-palette-selector" onchange="changeChartColor('{insight_id}', this.value)">
+                            <select class="color-palette-selector" onchange="changeChartColor('{viz_id}', this.value)">
                                 <option value="">Select Color</option>
                                 <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
                                 <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
@@ -119,13 +120,13 @@ class PlotlyDashboardGenerator:
                     </div>
                     <p class="chart-description">{description}</p>
                 </div>
-                <div id="chart_{insight_id}" class="plotly-chart"></div>
+                <div id="chart_{viz_id}" class="plotly-chart"></div>
             </div>
             '''
             chart_sections.append(chart_div)
 
             # Create Plotly script
-            plotly_script = self._create_plotly_script(insight_id, chart_type, data)
+            plotly_script = self._create_plotly_script(viz_id, chart_type, data)
             plotly_scripts.append(plotly_script)
 
         # Build complete HTML
@@ -443,16 +444,17 @@ class PlotlyDashboardGenerator:
 
         return html
 
-    def _create_plotly_script(self, insight_id: int, chart_type: str, data: Dict) -> str:
+    def _create_plotly_script(self, viz_id: int, chart_type: str, data: Dict) -> str:
         """
         Create Plotly JavaScript code for a chart.
 
-        Handles two data formats:
-        1. LLM format: {'labels': [...], 'datasets': [{'label': 'X', 'data': [...]}]}
-        2. Legacy format: {'x': [...], 'y': [...], 'labels': {'x': '...', 'y': '...'}}
+        Handles three data formats:
+        1. LLM datasets format: {'labels': [...], 'datasets': [{'label': 'X', 'data': [...]}]}
+        2. LLM simple format: {'chart_type': 'bar', 'data': [...], 'labels': [...]}
+        3. Legacy format: {'x': [...], 'y': [...], 'labels': {'x': '...', 'y': '...'}}
 
         Args:
-            insight_id: Unique ID for the chart
+            viz_id: Unique ID for the chart
             chart_type: Type of chart (line, bar, scatter, etc.)
             data: Chart data dictionary
 
@@ -467,10 +469,10 @@ class PlotlyDashboardGenerator:
 
             if not datasets:
                 # Empty datasets - return empty chart
-                return f"console.log('No data for chart_{insight_id}');"
+                return f"console.log('No data for chart_{viz_id}');"
 
             # Professional varied color palette - different colors for each dataset/insight
-            # Use insight_id as seed for color selection to ensure variety across charts
+            # Use viz_id as seed for color selection to ensure variety across charts
             colors = [
                 '#667eea', '#764ba2', '#4facfe', '#43e97b', '#fa709a',
                 '#fee140', '#30cfd0', '#c471ed', '#f38181', '#f093fb',
@@ -482,7 +484,7 @@ class PlotlyDashboardGenerator:
             traces = []
             for idx, ds in enumerate(datasets):
                 # Use different color for each dataset within a chart
-                color = colors[(insight_id + idx) % len(colors)]
+                color = colors[(viz_id + idx) % len(colors)]
                 trace = {
                     'x': x_data,
                     'y': ds.get('data', []),
@@ -521,13 +523,55 @@ class PlotlyDashboardGenerator:
                 # Use first dataset label as y-axis hint
                 y_label = datasets[0].get('label', 'Y')
 
+        elif 'data' in data and isinstance(data.get('labels'), list):
+            # Format 3: LLM simple format {'chart_type': 'bar', 'data': [...], 'labels': [...]}
+            x_data = data.get('labels', [])
+            y_data = data.get('data', [])
+
+            # Create a single trace with professional styling
+            colors = [
+                '#667eea', '#764ba2', '#4facfe', '#43e97b', '#fa709a',
+                '#fee140', '#30cfd0', '#c471ed', '#f38181', '#f093fb',
+                '#66bb6a', '#ef5350', '#42a5f5', '#ab47bc', '#ffa726',
+                '#26c6da', '#9ccc65', '#5c6bc0', '#ec407a', '#ffca28'
+            ]
+            color = colors[viz_id % len(colors)]
+
+            trace = {
+                'x': x_data,
+                'y': y_data,
+                'type': self._plotly_chart_type(chart_type),
+                'mode': 'lines+markers' if chart_type == 'line' else None,
+                'marker': {
+                    'color': color,
+                    'size': 8,
+                    'line': {
+                        'color': 'white',
+                        'width': 2
+                    }
+                },
+                'line': {
+                    'color': color,
+                    'width': 3,
+                    'shape': 'spline'
+                } if chart_type == 'line' else None,
+                'hovertemplate': '<b>%{x}</b><br>%{y:,.2f}<extra></extra>'
+            }
+            # Remove None values
+            trace = {k: v for k, v in trace.items() if v is not None}
+            traces_json = json.dumps([trace])
+
+            # Extract or infer axis labels
+            x_label = data.get('x_label', '') or data.get('xlabel', '') or 'Categories'
+            y_label = data.get('y_label', '') or data.get('ylabel', '') or 'Value'
+
         else:
-            # Legacy format: {'x': [...], 'y': [...]}
+            # Legacy format: {'x': [...], 'y': [...], 'labels': {'x': '...', 'y': '...'}}
             x_data = data.get('x', [])
             y_data = data.get('y', [])
             labels = data.get('labels', {})
-            x_label = labels.get('x', 'X')
-            y_label = labels.get('y', 'Y')
+            x_label = labels.get('x', 'X') if isinstance(labels, dict) else 'X'
+            y_label = labels.get('y', 'Y') if isinstance(labels, dict) else 'Y'
 
             # Handle multi-series data (y is a list of lists)
             if y_data and isinstance(y_data[0], list):
@@ -617,7 +661,7 @@ class PlotlyDashboardGenerator:
             ],
             'toImageButtonOptions': {
                 'format': 'png',
-                'filename': f'chart_{insight_id}',
+                'filename': f'chart_{viz_id}',
                 'height': 800,
                 'width': 1200,
                 'scale': 2
@@ -626,7 +670,7 @@ class PlotlyDashboardGenerator:
         config_json = json.dumps(config)
 
         script = f'''
-        Plotly.newPlot('chart_{insight_id}', {traces_json}, {layout_json}, {config_json});
+        Plotly.newPlot('chart_{viz_id}', {traces_json}, {layout_json}, {config_json});
         '''
 
         return script

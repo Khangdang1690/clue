@@ -1,0 +1,9 @@
+order_id,customer_id,amount,status
+101,1,5000,Complete
+102,2,7500,Pending
+103,1,3200,Complete
+104,3,9100,Complete
+105,2,4400,Shipped
+106,4,2100,Complete
+107,5,6800,Complete
+108,1,5500,Pending

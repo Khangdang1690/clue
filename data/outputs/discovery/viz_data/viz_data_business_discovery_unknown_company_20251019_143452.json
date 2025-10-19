@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "dataset_name": "business_discovery_unknown_company",
+    "total_insights": 3,
+    "generated_date": "2025-10-19 14:34:52",
+    "domain": "Unknown",
+    "dataset_type": "Data Analysis"
+  },
+  "visualizations": [
+    {
+      "insight_id": 1,
+      "title": "Top 10 Customers by Revenue",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "data": [
+          21918.515,
+          20895.101,
+          20055.2295,
+          19298.457,
+          17694.5805,
+          17067.552,
+          16943.4875,
+          16829.304,
+          16785.914,
+          16590.824
+        ],
+        "labels": [
+          "Company_112",
+          "Company_214",
+          "Company_182",
+          "Company_239",
+          "Company_62",
+          "Company_211",
+          "Company_498",
+          "Company_126",
+          "Company_464",
+          "Company_420"
+        ],
+        "title": "Top 10 Customers by Revenue"
+      },
+      "description": "Visualization for: Which customers generate the most revenue?"
+    },
+    {
+      "insight_id": 1,
+      "title": "Top Industries for High Churn Risk Customers",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "data": [
+          30.618892508143325,
+          20.521172638436482,
+          17.91530944625407,
+          15.960912052117262,
+          14.983713355048861
+        ],
+        "labels": [
+          "Tech",
+          "Retail",
+          "Healthcare",
+          "Finance",
+          "Manufacturing"
+        ],
+        "title": "Top Industries for High Churn Risk Customers"
+      },
+      "description": "Visualization for: Why are customers leaving?"
+    },
+    {
+      "insight_id": 1,
+      "title": "Top 10 Most Profitable Products",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "data": [
+          22983.801192000003,
+          21917.09337,
+          21440.204999999998,
+          17988.223968,
+          17848.12105,
+          16456.006994,
+          16145.155120500001,
+          14683.468292999998,
+          14566.660154999998,
+          14539.377765000001
+        ],
+        "labels": [
+          "Product_Premium_127",
+          "Product_Premium_83",
+          "Product_Premium_193",
+          "Product_Premium_72",
+          "Product_Premium_41",
+          "Product_Premium_9",
+          "Product_Premium_134",
+          "Product_Premium_49",
+          "Product_Premium_181",
+          "Product_Premium_18"
+        ],
+        "title": "Top 10 Most Profitable Products"
+      },
+      "description": "Visualization for: Which products are most profitable?"
+    }
+  ]
+}

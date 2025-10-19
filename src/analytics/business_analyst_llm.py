@@ -29,11 +29,22 @@ class BusinessAnalystLLM:
 
         self.analysis_history = []
 
+        # Track global execution counter (like autonomous_explorer's PythonExecutorTool)
+        self.execution_counter = 0
+
     def analyze_business_question(self,
                                  question: str,
                                  datasets: Dict[str, pd.DataFrame],
-                                 max_attempts: int = 3) -> Dict[str, Any]:
-        """Analyze a business question by writing and executing code."""
+                                 max_attempts: int = 3,
+                                 viz_data_store=None) -> Dict[str, Any]:
+        """Analyze a business question by writing and executing code.
+
+        Args:
+            question: Business question to analyze
+            datasets: Dictionary of dataframes
+            max_attempts: Maximum attempts to generate working code
+            viz_data_store: Optional VisualizationDataStore for saving viz data
+        """
 
         if not self.model:
             return {"error": "No LLM configured"}
@@ -72,6 +83,26 @@ class BusinessAnalystLLM:
                 from src.discovery.multi_table_executor import MultiTableCodeExecutor
                 executor = MultiTableCodeExecutor(datasets)
                 execution = executor.execute(code)
+
+                # Increment global execution counter (like PythonExecutorTool)
+                self.execution_counter += 1
+                execution_number = self.execution_counter
+
+                # Check if execution returned chart data for visualization
+                if execution.success and execution.result and viz_data_store:
+                    # If result is a dict with chart_type, save it (like PythonExecutorTool does)
+                    if isinstance(execution.result, dict) and 'chart_type' in execution.result:
+                        try:
+                            viz_data_store.add_visualization(
+                                execution_number=execution_number,  # Use global execution counter
+                                chart_data=execution.result,
+                                title=execution.result.get('title', f"Execution {execution_number}"),
+                                description=f"Visualization for: {question}",
+                                question=question  # Group multiple vizs for same question
+                            )
+                            print(f"[VIZ] Saved chart {execution_number}: {execution.result.get('chart_type', 'unknown')}")
+                        except Exception as e:
+                            print(f"[VIZ] Failed to save visualization: {str(e)[:50]}")
 
                 if not execution.success:
                     # Store failed attempt
@@ -112,6 +143,9 @@ Please write CORRECTED code that:
                     'attempts': attempt + 1
                 }
 
+                # Visualization data is now saved inline during execution (see above)
+                # No need to parse text output
+
                 self.analysis_history.append(result)
                 return result
 
@@ -145,6 +179,22 @@ CRITICAL RULES - MUST FOLLOW:
 5. NEVER write: high_risk = df[at_risk > 0.5] if 'at_risk' doesn't exist
 6. ALWAYS write: high_risk = df[df['column_name'] > 0.5] using the actual column name
 7. Print specific findings with actual numbers from the REAL data
+
+VISUALIZATION RULES:
+- To create a chart for Plotly dashboards, return a dictionary with chart data
+- Use this format: result = {{'chart_type': 'bar', 'data': [...values...], 'labels': [...labels...], 'title': '...'}}
+- Chart types: 'bar', 'line', 'pie', 'scatter'
+- Example:
+  ```python
+  # After calculating top_products
+  result = {{
+      'chart_type': 'bar',
+      'data': top_products['revenue'].tolist(),
+      'labels': top_products['product_name'].tolist(),
+      'title': 'Top 10 Products by Revenue'
+  }}
+  ```
+- The result variable will be automatically saved as visualization data
 
 WORKING EXAMPLE (DO NOT CREATE MOCK DATA):
 ```python
@@ -259,6 +309,55 @@ REMEMBER:
                 insights.append(line.strip())
 
         return insights
+
+    def _save_viz_data(self, viz_data_store, question: str, output: str, insights: List[str]):
+        """Save visualization data for dashboard generation."""
+        import re
+        import json
+
+        # Parse the output for numeric findings
+        viz_entries = []
+
+        # Look for patterns like "Top 5 customers" or "revenue by X"
+        lines = output.split('\n')
+        current_data = None
+
+        for line in lines:
+            # Detect headers like "Top 5" or "By industry"
+            if re.search(r'(Top \d+|by \w+|average|total|breakdown)', line, re.IGNORECASE):
+                if current_data:
+                    viz_entries.append(current_data)
+                current_data = {
+                    'title': line.strip(),
+                    'data': [],
+                    'viz_type': 'bar'  # Default viz type
+                }
+            # Detect data lines with numbers
+            elif current_data and ('$' in line or '%' in line):
+                # Try to extract label and value
+                parts = re.split(r'[:|-]', line)
+                if len(parts) >= 2:
+                    label = parts[0].strip()
+                    value_str = parts[-1].strip()
+                    # Extract numeric value
+                    value_match = re.search(r'[\d,]+\.?\d*', value_str.replace(',', ''))
+                    if value_match:
+                        value = float(value_match.group())
+                        current_data['data'].append({'label': label, 'value': value})
+
+        if current_data and current_data['data']:
+            viz_entries.append(current_data)
+
+        # Save each visualization entry
+        for i, viz_entry in enumerate(viz_entries):
+            if viz_entry['data']:
+                viz_data_store.add_visualization(
+                    insight_id=f"{question[:30]}_{i}",
+                    viz_type=viz_entry['viz_type'],
+                    data=viz_entry['data'],
+                    title=viz_entry.get('title', question),
+                    description=f"Analysis for: {question}"
+                )
 
     def explore_business_data(self,
                              datasets: Dict[str, pd.DataFrame],

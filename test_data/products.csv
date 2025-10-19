@@ -1,0 +1,11 @@
+product_id,product_name,category,price
+201,Widget A,Hardware,299
+202,Widget B,Hardware,499
+203,Gadget X,Electronics,799
+204,Tool Pro,Tools,199
+205,Device 2000,Electronics,1299
+206,Software Suite,Software,99
+207,Hardware Kit,Hardware,599
+208,Service Pack,Services,149
+209,Premium Plan,Services,249
+210,Basic Plan,Services,49

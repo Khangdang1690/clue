@@ -1,12 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venvScriptspython.exe create_causal_test_data.py)",
-      "Bash(python create_causal_test_data.py)",
-      "Bash(python test_minimal.py)",
-      "Bash(timeout 240 python test_minimal.py)",
-      "Bash(python test_relationships_only.py)",
-      "Bash(python test_business_discovery.py)"
+      "Bash(awk '{print $NF}')"
     ],
     "deny": [],
     "ask": []

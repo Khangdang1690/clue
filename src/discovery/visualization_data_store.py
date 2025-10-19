@@ -60,35 +60,45 @@ class VisualizationDataStore:
 
     def add_visualization(
         self,
-        execution_number: int,
-        chart_data: Dict[str, Any],
+        execution_number: int = None,  # Now optional, will auto-generate if not provided
+        chart_data: Dict[str, Any] = None,
         title: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        question: Optional[str] = None  # The business question this viz answers
     ):
         """
         Add a visualization to the JSON file incrementally.
 
         Args:
-            execution_number: The code execution number (used as insight_id)
+            execution_number: Optional execution number. If None, auto-generates unique ID
             chart_data: Dictionary containing chart data from code execution
             title: Optional title for the visualization
             description: Optional description
+            question: The business question/insight this visualization supports
         """
         with self._lock:
             # Read current data
             with open(self.json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
+            # Auto-generate unique viz_id if not provided
+            if execution_number is None:
+                # Use the count of existing visualizations + 1
+                viz_id = len(data["visualizations"]) + 1
+            else:
+                viz_id = execution_number
+
             # Extract chart type
-            chart_type = chart_data.get('chart_type', 'unknown')
+            chart_type = chart_data.get('chart_type', 'unknown') if chart_data else 'unknown'
 
             # Create visualization entry
             viz_entry = {
-                "insight_id": execution_number,
-                "title": title or f"Execution {execution_number}",
+                "viz_id": viz_id,  # Unique ID for this visualization
+                "title": title or f"Visualization {viz_id}",
                 "chart_type": chart_type,
-                "data": chart_data,
-                "description": description or f"Visualization from code execution {execution_number}"
+                "data": chart_data or {},
+                "description": description or f"Visualization {viz_id}",
+                "question": question  # Groups multiple vizs for same question
             }
 
             # Append to visualizations array
@@ -101,7 +111,7 @@ class VisualizationDataStore:
             with open(self.json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
-            print(f"[VIZ_DATA] Added visualization {execution_number}: {chart_type}")
+            print(f"[VIZ_DATA] Added visualization {viz_id}: {chart_type} for question: {question[:50] if question else 'N/A'}")
 
     def get_json_path(self) -> str:
         """Get the path to the viz_data JSON file."""
