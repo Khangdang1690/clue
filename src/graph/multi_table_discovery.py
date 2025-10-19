@@ -13,6 +13,11 @@ from src.database.repository import (
 )
 from src.discovery.autonomous_explorer import AutonomousExplorer
 from src.utils.embedding_service import get_embedding_service
+# Advanced Analytics modules
+from src.analytics import (
+    TimeSeriesForecaster, AnomalyDetector, CausalAnalyzer,
+    VarianceDecomposer, ImpactEstimator, BusinessInsightSynthesizer
+)
 import os
 from datetime import datetime
 
@@ -34,6 +39,9 @@ class MultiTableDiscovery:
         )
         self.embedding_service = get_embedding_service()
 
+        # Advanced Analytics: Business Insight Synthesizer (converts stats to plain English)
+        self.synthesizer = BusinessInsightSynthesizer()
+
         # Build workflow
         self.graph = self._build_graph()
 
@@ -45,17 +53,21 @@ class MultiTableDiscovery:
         workflow.add_node("load_datasets", self._load_datasets_node)
         workflow.add_node("suggest_related", self._suggest_related_node)
         workflow.add_node("single_table_analysis", self._single_table_analysis_node)
+        workflow.add_node("single_table_advanced_analytics", self._single_table_advanced_analytics_node)
         workflow.add_node("prepare_cross_table", self._prepare_cross_table_node)
         workflow.add_node("cross_table_analysis", self._cross_table_analysis_node)
+        workflow.add_node("cross_table_advanced_analytics", self._cross_table_advanced_analytics_node)
         workflow.add_node("generate_report", self._generate_report_node)
 
         # Define flow
         workflow.set_entry_point("load_datasets")
         workflow.add_edge("load_datasets", "suggest_related")
         workflow.add_edge("suggest_related", "single_table_analysis")
-        workflow.add_edge("single_table_analysis", "prepare_cross_table")
+        workflow.add_edge("single_table_analysis", "single_table_advanced_analytics")
+        workflow.add_edge("single_table_advanced_analytics", "prepare_cross_table")
         workflow.add_edge("prepare_cross_table", "cross_table_analysis")
-        workflow.add_edge("cross_table_analysis", "generate_report")
+        workflow.add_edge("cross_table_analysis", "cross_table_advanced_analytics")
+        workflow.add_edge("cross_table_advanced_analytics", "generate_report")
         workflow.add_edge("generate_report", END)
 
         return workflow.compile()
@@ -95,8 +107,10 @@ class MultiTableDiscovery:
             'metadata': {},
             'relationships': [],
             'single_table_results': {},
+            'single_table_advanced_insights': {},  # Advanced analytics per table
             'joined_dataframe': None,
             'cross_table_insights': [],
+            'cross_table_advanced_insights': [],  # Advanced analytics across tables
             'suggested_datasets': [],
             'unified_report_path': None,
             'analysis_session_id': None,
@@ -232,6 +246,127 @@ class MultiTableDiscovery:
 
         return state
 
+    def _single_table_advanced_analytics_node(self, state: MultiTableDiscoveryState) -> MultiTableDiscoveryState:
+        """Run advanced analytics on each table individually."""
+        state['current_phase'] = 'single_table_advanced_analytics'
+        print("\n[ADVANCED] SINGLE-TABLE ADVANCED ANALYTICS")
+
+        # Initialize insights storage
+        if 'single_table_advanced_insights' not in state:
+            state['single_table_advanced_insights'] = {}
+
+        try:
+            for dataset_id, df in state['datasets'].items():
+                metadata = state['metadata'][dataset_id]
+                table_name = metadata['table_name']
+
+                print(f"\n  Analyzing {table_name}...")
+
+                # Initialize insights list for this dataset
+                state['single_table_advanced_insights'][dataset_id] = []
+
+                # 1. Forecasting - detect time series columns
+                time_columns = self._detect_time_series_columns(df)
+
+                if time_columns:
+                    print(f"    Found {len(time_columns)} time series column(s)")
+
+                    for col_info in time_columns[:2]:  # Limit to top 2 time series
+                        col_name = col_info['column']
+                        series = col_info['series']
+
+                        try:
+                            forecaster = TimeSeriesForecaster(method='auto')
+                            forecast_result = forecaster.forecast(
+                                data=series,
+                                periods=6,
+                                dataset_name=table_name,
+                                context={
+                                    'metric_name': col_name,
+                                    'table': table_name,
+                                    'domain': metadata.get('domain', 'Unknown')
+                                }
+                            )
+
+                            # Generate business insight (NO statistics shown to user)
+                            insight_text = self.synthesizer.synthesize_forecast(forecast_result)
+
+                            state['single_table_advanced_insights'][dataset_id].append({
+                                'type': 'forecast',
+                                'title': f"{col_name.title()} Forecast",
+                                'insight': insight_text,
+                                'confidence': forecast_result.validation.confidence_level.value
+                            })
+
+                            print(f"      -> Forecast generated for {col_name}")
+
+                        except Exception as e:
+                            print(f"      [WARN] Forecasting failed for {col_name}: {e}")
+
+                # 2. Anomaly Detection - run on numeric columns
+                numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+
+                if numeric_cols:
+                    print(f"    Found {len(numeric_cols)} numeric column(s)")
+
+                    for col_name in numeric_cols[:3]:  # Limit to top 3 numeric columns
+                        try:
+                            # Skip if all values are the same
+                            if df[col_name].nunique() <= 1:
+                                continue
+
+                            detector = AnomalyDetector(method='auto')
+                            anomaly_result = detector.detect_anomalies(
+                                data=df[col_name],
+                                dataset_name=table_name,
+                                context={
+                                    'metric_name': col_name,
+                                    'table': table_name
+                                }
+                            )
+
+                            # Only report if anomalies found
+                            if anomaly_result.results['total_anomalies'] > 0:
+                                insight_text = self.synthesizer.synthesize_anomalies(anomaly_result)
+
+                                state['single_table_advanced_insights'][dataset_id].append({
+                                    'type': 'anomaly',
+                                    'title': f"Unusual Patterns in {col_name.title()}",
+                                    'insight': insight_text,
+                                    'confidence': anomaly_result.validation.confidence_level.value
+                                })
+
+                                print(f"      -> {anomaly_result.results['total_anomalies']} anomalies detected in {col_name}")
+
+                        except Exception as e:
+                            print(f"      [WARN] Anomaly detection failed for {col_name}: {e}")
+
+                total_insights = len(state['single_table_advanced_insights'][dataset_id])
+                print(f"    Advanced insights generated: {total_insights}")
+
+        except Exception as e:
+            print(f"[ERROR] Single-table advanced analytics failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        return state
+
+    def _detect_time_series_columns(self, df: pd.DataFrame) -> List[Dict]:
+        """Detect columns that could be time series (have datetime index or enough numeric data)."""
+        time_series = []
+
+        # Check if DataFrame has datetime index
+        if isinstance(df.index, pd.DatetimeIndex):
+            # Check numeric columns
+            for col in df.select_dtypes(include=['number']).columns:
+                if df[col].notna().sum() >= 12:  # At least 12 observations
+                    time_series.append({
+                        'column': col,
+                        'series': df[col]
+                    })
+
+        return time_series
+
     def _prepare_cross_table_node(self, state: MultiTableDiscoveryState) -> MultiTableDiscoveryState:
         """Prepare data for cross-table analysis."""
         state['current_phase'] = 'preparing_cross_table'
@@ -321,6 +456,119 @@ class MultiTableDiscovery:
         except Exception as e:
             print(f"[ERROR] Cross-table analysis failed: {e}")
             state['cross_table_insights'] = []
+            import traceback
+            traceback.print_exc()
+
+        return state
+
+    def _cross_table_advanced_analytics_node(self, state: MultiTableDiscoveryState) -> MultiTableDiscoveryState:
+        """Run advanced analytics across related tables."""
+        state['current_phase'] = 'cross_table_advanced_analytics'
+        print("\n[ADVANCED] CROSS-TABLE ADVANCED ANALYTICS")
+
+        # Initialize insights storage
+        if 'cross_table_advanced_insights' not in state:
+            state['cross_table_advanced_insights'] = []
+
+        # Skip if no joined data
+        if state['joined_dataframe'] is None or state['joined_dataframe'].empty:
+            print("  [SKIP] No joined data available")
+            return state
+
+        joined_df = state['joined_dataframe']
+
+        try:
+            # Get numeric columns for analysis
+            numeric_cols = joined_df.select_dtypes(include=['number']).columns.tolist()
+
+            if len(numeric_cols) < 2:
+                print("  [SKIP] Not enough numeric columns for cross-table analytics")
+                return state
+
+            # 1. Causal Inference - test potential cause-effect relationships
+            print(f"  Testing causal relationships between {len(numeric_cols)} numeric columns...")
+
+            # Test top pairs of columns (limit to avoid too many tests)
+            for i in range(min(2, len(numeric_cols) - 1)):
+                cause_col = numeric_cols[i]
+                effect_col = numeric_cols[i + 1]
+
+                try:
+                    # Skip if too few observations
+                    if joined_df[cause_col].notna().sum() < 30 or joined_df[effect_col].notna().sum() < 30:
+                        continue
+
+                    analyzer = CausalAnalyzer(max_lag=5)
+                    causal_result = analyzer.analyze_causality(
+                        cause=joined_df[cause_col],
+                        effect=joined_df[effect_col],
+                        dataset_name="Cross-Table Analysis",
+                        context={
+                            'cause_name': cause_col,
+                            'effect_name': effect_col
+                        }
+                    )
+
+                    # Only report if relationship is significant
+                    relationships = causal_result.results.get('relationships', [])
+                    if relationships and relationships[0].get('is_significant'):
+                        insight_text = self.synthesizer.synthesize_causal(causal_result)
+
+                        state['cross_table_advanced_insights'].append({
+                            'type': 'causal',
+                            'title': f"Causal Link: {cause_col} -> {effect_col}",
+                            'insight': insight_text,
+                            'confidence': causal_result.validation.confidence_level.value
+                        })
+
+                        print(f"    -> Causal relationship found: {cause_col} -> {effect_col}")
+
+                except Exception as e:
+                    print(f"    [WARN] Causal analysis failed for {cause_col} -> {effect_col}: {e}")
+
+            # 2. Variance Decomposition - if we can identify a target variable
+            # Look for common target variable names
+            target_candidates = [col for col in numeric_cols if any(
+                keyword in col.lower() for keyword in ['revenue', 'sales', 'profit', 'churn', 'value']
+            )]
+
+            if target_candidates and len(numeric_cols) >= 4:
+                target_col = target_candidates[0]
+                feature_cols = [col for col in numeric_cols if col != target_col][:5]  # Limit to 5 features
+
+                try:
+                    X = joined_df[feature_cols].fillna(0)
+                    y = joined_df[target_col].fillna(0)
+
+                    # Skip if not enough variance
+                    if y.nunique() > 1 and X.shape[0] >= 30:
+                        decomposer = VarianceDecomposer(method='statistical')
+                        variance_result = decomposer.decompose(
+                            X=X,
+                            y=y,
+                            dataset_name="Cross-Table Analysis",
+                            context={'outcome': target_col}
+                        )
+
+                        insight_text = self.synthesizer.synthesize_variance_decomposition(variance_result)
+
+                        state['cross_table_advanced_insights'].append({
+                            'type': 'variance',
+                            'title': f"Drivers of {target_col.title()}",
+                            'insight': insight_text,
+                            'confidence': variance_result.validation.confidence_level.value
+                        })
+
+                        print(f"    -> Variance decomposition completed for {target_col}")
+
+                except Exception as e:
+                    print(f"    [WARN] Variance decomposition failed: {e}")
+
+            total_insights = len(state['cross_table_advanced_insights'])
+            print(f"  Cross-table advanced insights generated: {total_insights}")
+
+        except Exception as e:
+            print(f"[ERROR] Cross-table advanced analytics failed: {e}")
             import traceback
             traceback.print_exc()
 
@@ -460,6 +708,36 @@ class MultiTableDiscovery:
         lines.append(f"**Datasets:** {len(state['dataset_ids'])}")
         lines.append("")
 
+        # Executive Summary
+        lines.append("## Executive Summary")
+        lines.append("")
+
+        # Count insights
+        total_insights = sum(len(result.answered_questions) for result in state['single_table_results'].values())
+        cross_insights = len(state.get('cross_table_insights', []))
+
+        lines.append(f"**Key Metrics:**")
+        lines.append(f"- {len(state['dataset_ids'])} datasets analyzed")
+        lines.append(f"- {total_insights} single-table insights discovered")
+        lines.append(f"- {cross_insights} cross-table patterns identified")
+        lines.append(f"- {len(state.get('relationships', []))} relationships detected")
+        lines.append("")
+
+        # Top 3 insights across all datasets
+        lines.append("**Top Findings:**")
+        all_insights = []
+        for dataset_id, result in state['single_table_results'].items():
+            table_name = state['metadata'][dataset_id]['table_name']
+            for q in result.answered_questions[:2]:  # Top 2 from each dataset
+                all_insights.append((table_name, q.question, q.confidence))
+
+        # Sort by confidence and take top 3
+        all_insights.sort(key=lambda x: x[2], reverse=True)
+        for i, (table, question, conf) in enumerate(all_insights[:3], 1):
+            lines.append(f"{i}. **{table}**: {question}")
+
+        lines.append("")
+
         # Dataset summary
         lines.append("## Datasets Analyzed")
         for dataset_id, meta in state['metadata'].items():
@@ -467,6 +745,39 @@ class MultiTableDiscovery:
             lines.append(f"  - {meta.get('row_count', 0):,} rows × {meta.get('column_count', 0)} columns")
             if meta.get('description'):
                 lines.append(f"  - {meta['description']}")
+
+        # Data Quality Assessment
+        lines.append("\n## Data Quality Assessment")
+        lines.append("")
+
+        for dataset_id, meta in state['metadata'].items():
+            table_name = meta['table_name']
+            row_count = meta.get('row_count', 0)
+
+            lines.append(f"### {table_name}")
+
+            # Sample size assessment
+            if row_count < 30:
+                confidence = "VERY LOW"
+                icon = "🔴"
+            elif row_count < 100:
+                confidence = "LOW"
+                icon = "🟡"
+            elif row_count < 1000:
+                confidence = "MEDIUM"
+                icon = "🟢"
+            else:
+                confidence = "HIGH"
+                icon = "🟢"
+
+            lines.append(f"- **Sample Size**: {row_count:,} rows - Statistical confidence: {icon} {confidence}")
+
+            # Temporal coverage (if available in metadata)
+            if row_count > 0:
+                lines.append(f"- **Schema**: {meta.get('column_count', 0)} columns validated")
+                lines.append(f"- **Domain Classification**: {meta.get('domain', 'Unknown')}")
+
+        lines.append("")
 
         # Relationships
         if state['relationships']:
@@ -480,9 +791,26 @@ class MultiTableDiscovery:
         for dataset_id, result in state['single_table_results'].items():
             table_name = state['metadata'][dataset_id]['table_name']
             lines.append(f"\n### {table_name}")
+
+            # Add sample size warning if dataset is small
+            row_count = state['metadata'][dataset_id].get('row_count', 0)
+            if row_count > 0 and row_count < 100:
+                lines.append(f"\n> ⚠️ **Sample Size Warning**: Based on only {row_count:,} rows. Statistical confidence may be LIMITED.")
+
             for q in result.answered_questions[:5]:  # Top 5 insights
-                lines.append(f"- **{q.question}**")
-                lines.append(f"  - {q.answer}")
+                # Don't duplicate the question header - answer already contains "### Insight N: [Title]"
+                lines.append(f"{q.answer}")
+
+            # Add advanced analytics insights for this table
+            if dataset_id in state.get('single_table_advanced_insights', {}):
+                advanced_insights = state['single_table_advanced_insights'][dataset_id]
+                if advanced_insights:
+                    lines.append(f"\n#### Advanced Analytics\n")
+
+                    for adv_insight in advanced_insights:
+                        lines.append(f"**{adv_insight['title']}**\n")
+                        lines.append(adv_insight['insight'])
+                        lines.append("")
 
         # Cross-table insights
         if state['cross_table_insights']:
@@ -491,6 +819,16 @@ class MultiTableDiscovery:
                 lines.append(f"- **{insight['question']}**")
                 lines.append(f"  - {insight['finding']}")
                 lines.append(f"  - Confidence: {insight['confidence']:.0%}")
+
+        # Cross-table advanced analytics insights
+        if state.get('cross_table_advanced_insights'):
+            lines.append("\n## Cross-Table Advanced Analytics")
+            lines.append("")
+
+            for adv_insight in state['cross_table_advanced_insights']:
+                lines.append(f"### {adv_insight['title']}\n")
+                lines.append(adv_insight['insight'])
+                lines.append("")
 
         # Suggested datasets
         if state['suggested_datasets']:

@@ -1,6 +1,6 @@
 """Auto-calculates KPIs based on domain and available columns."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 from src.utils.llm_client import get_llm

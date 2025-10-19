@@ -182,9 +182,14 @@ class ETLWorkflow:
                 print(f"    Domain: {analysis['domain']}")
                 print(f"    Entities: {', '.join(analysis.get('entities', []))}")
 
+            print(f"[OK] Analyzed {len(state['semantic_metadata'])} datasets")
+
         except Exception as e:
             state['status'] = 'error'
             state['error_message'] = f"Semantic analysis failed: {e}"
+            print(f"[ERROR] Semantic analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
 
         return state
 
@@ -241,10 +246,16 @@ class ETLWorkflow:
 
                 state['cleaned_dataframes'][file_id] = cleaned_df
                 state['cleaning_reports'][file_id] = report
+                print(f"  Cleaned {state['semantic_metadata'][file_id]['table_name']}: {len(cleaned_df)} rows")
+
+            print(f"[OK] Cleaned {len(state['cleaned_dataframes'])} datasets")
 
         except Exception as e:
             state['status'] = 'error'
             state['error_message'] = f"Data cleaning failed: {e}"
+            print(f"[ERROR] Cleaning failed: {e}")
+            import traceback
+            traceback.print_exc()
 
         return state
 

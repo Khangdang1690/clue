@@ -9,8 +9,8 @@ import uuid
 
 Base = declarative_base()
 
-# Gemini embedding dimension
-EMBEDDING_DIM = 768
+# Gemini embedding dimension (new free SDK)
+EMBEDDING_DIM = 3072
 
 
 class Company(Base):
@@ -45,7 +45,7 @@ class Dataset(Base):
     description = Column(Text)
     entities = Column(JSON)  # ["Customer", "Product", "Transaction"]
 
-    # Embeddings (Gemini 768 dimensions)
+    # Embeddings (Gemini 3072 dimensions - new free SDK)
     description_embedding = Column(Vector(EMBEDDING_DIM))  # Semantic embedding of description
     schema_embedding = Column(Vector(EMBEDDING_DIM))  # Embedding of column names/types
 

@@ -85,7 +85,7 @@ class AdaptiveCleaner:
         report['rows_removed'] = report['original_rows'] - report['final_rows']
         report['columns_added'] = len(cleaned_df.columns) - report['original_columns']
 
-        print(f"[OK] Cleaned: {report['original_rows']:,} → {report['final_rows']:,} rows")
+        print(f"[OK] Cleaned: {report['original_rows']:,} -> {report['final_rows']:,} rows")
 
         return cleaned_df, report
 
@@ -108,7 +108,7 @@ class AdaptiveCleaner:
                 if sem_type == 'date':
                     if current_dtype != 'datetime64[ns]':
                         df[col] = pd.to_datetime(df[col], errors='coerce')
-                        conversions.append(f"{col}: {current_dtype} → datetime")
+                        conversions.append(f"{col}: {current_dtype} -> datetime")
 
                 # Numeric conversion for measures
                 elif sem_type == 'measure':
@@ -120,13 +120,13 @@ class AdaptiveCleaner:
                                   .str.replace('%', '', regex=False)
                                   .str.strip())
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                        conversions.append(f"{col}: object → numeric")
+                        conversions.append(f"{col}: object -> numeric")
 
                 # Key columns should be strings for consistency
                 elif sem_type == 'key':
                     if current_dtype != 'object':
                         df[col] = df[col].astype(str)
-                        conversions.append(f"{col}: {current_dtype} → string")
+                        conversions.append(f"{col}: {current_dtype} -> string")
 
             except Exception as e:
                 errors.append(f"Failed to convert {col}: {str(e)}")
@@ -265,7 +265,7 @@ class AdaptiveCleaner:
                 # Remove any trailing spaces
                 df[col] = df[col].str.strip()
 
-                standardized.append(f"{col} ({original_dtype} → string)")
+                standardized.append(f"{col} ({original_dtype} -> string)")
 
         return df, {
             'step': 'standardize_foreign_keys',

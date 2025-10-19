@@ -201,7 +201,7 @@ def test_embedding_service():
         print(f"  '{text1}' vs '{text3}': {sim13:.3f}")
 
         if sim12 > sim13:
-            print("  ✓ Semantic similarity working correctly")
+            print("  OK Semantic similarity working correctly")
 
         return True
 
@@ -241,14 +241,14 @@ def main():
             print("="*80)
             print("\nThe Auto-ETL pipeline is working correctly!")
             print("Features tested:")
-            print("  ✓ Multi-format data ingestion")
-            print("  ✓ Semantic analysis with Gemini LLM")
-            print("  ✓ Embedding generation with Gemini")
-            print("  ✓ Relationship detection using embeddings")
-            print("  ✓ Context-aware data cleaning")
-            print("  ✓ Domain-specific KPI calculation")
-            print("  ✓ PostgreSQL storage with pgvector")
-            print("  ✓ Multi-table discovery and analysis")
+            print("  OK Multi-format data ingestion")
+            print("  OK Semantic analysis with Gemini LLM")
+            print("  OK Embedding generation with Gemini")
+            print("  OK Relationship detection using embeddings")
+            print("  OK Context-aware data cleaning")
+            print("  OK Domain-specific KPI calculation")
+            print("  OK PostgreSQL storage with pgvector")
+            print("  OK Multi-table discovery and analysis")
     else:
         print("\n[FAILED] ETL workflow did not complete")
 

@@ -53,10 +53,12 @@ class MultiTableDiscoveryState(TypedDict):
 
     # Phase 1: Single table results
     single_table_results: Dict[str, Any]  # {dataset_id: DiscoveryResult}
+    single_table_advanced_insights: Dict[str, List[Dict]]  # {dataset_id: [insights]}
 
     # Phase 2: Cross-table results
     joined_dataframe: Optional[pd.DataFrame]
     cross_table_insights: List[Dict]
+    cross_table_advanced_insights: List[Dict]  # Advanced analytics insights
     suggested_datasets: List[str]  # Additional datasets suggested by similarity
 
     # Results

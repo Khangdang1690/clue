@@ -1,8 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)",
-      "Bash(source:*)"
+      "Bash(netstat -ano)",
+      "Bash(findstr :5432)",
+      "Bash(docker inspect ai_analyst_db)",
+      "Bash(pip install google-genai)"
     ],
     "deny": [],
     "ask": []

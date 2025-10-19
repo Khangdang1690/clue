@@ -1,0 +1,96 @@
+{
+  "metadata": {
+    "dataset_name": "cross_table_analysis",
+    "total_insights": 3,
+    "generated_date": "2025-10-18 20:22:42",
+    "domain": "Multi-Domain",
+    "dataset_type": "Integrated"
+  },
+  "visualizations": [
+    {
+      "insight_id": 5,
+      "title": "Execution 5",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Total Revenue",
+          "Total Cost",
+          "Total Profit"
+        ],
+        "x_label": "Metric",
+        "y_label": "Amount (USD)",
+        "datasets": [
+          {
+            "label": "Amount",
+            "data": [
+              6600.0,
+              4350.0,
+              2250.0
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 5"
+    },
+    {
+      "insight_id": 8,
+      "title": "Execution 8",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "1",
+          "2"
+        ],
+        "x_label": "Month",
+        "y_label": "Amount (USD)",
+        "datasets": [
+          {
+            "label": "Total Revenue",
+            "data": [
+              5500,
+              1100
+            ]
+          },
+          {
+            "label": "Total Profit",
+            "data": [
+              1900,
+              350
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 8"
+    },
+    {
+      "insight_id": 9,
+      "title": "Execution 9",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Month 1 to Month 2"
+        ],
+        "x_label": "Period",
+        "y_label": "Percentage Change (%)",
+        "datasets": [
+          {
+            "label": "Revenue MoM Change (%)",
+            "data": [
+              -80.0
+            ]
+          },
+          {
+            "label": "Profit MoM Change (%)",
+            "data": [
+              -81.57894736842105
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 9"
+    }
+  ]
+}

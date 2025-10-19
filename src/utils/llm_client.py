@@ -1,21 +1,63 @@
 """LLM client configuration for Google Gemini.
 
 Updated for 2025 best practices with Gemini 2.5 Flash.
+Includes retry logic for rate limiting.
 """
 
 import os
+import time
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
+
+
+def retry_with_exponential_backoff(max_retries=5, initial_delay=30):
+    """Decorator to retry with exponential backoff for rate limiting."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_msg = str(e)
+                    # Check if it's a rate limit error
+                    if "429" in error_msg or "quota" in error_msg.lower() or "rate" in error_msg.lower():
+                        if attempt < max_retries - 1:
+                            # Extract wait time from error message if available
+                            wait_time = initial_delay * (2 ** attempt)
+
+                            # Try to parse retry delay from error message
+                            if "retry in" in error_msg.lower():
+                                try:
+                                    import re
+                                    match = re.search(r'retry.*?(\d+\.?\d*)\s*s', error_msg, re.IGNORECASE)
+                                    if match:
+                                        wait_time = float(match.group(1)) + 1  # Add 1 second buffer
+                                except:
+                                    pass
+
+                            print(f"[RATE LIMIT] Attempt {attempt + 1}/{max_retries} failed. Waiting {wait_time:.1f}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"[ERROR] Max retries ({max_retries}) exceeded for rate limiting")
+                            raise
+                    else:
+                        # Non-rate-limit error, don't retry
+                        raise
+            return None
+        return wrapper
+    return decorator
 
 
 def get_llm(
     temperature: float = 0.7,
     model: str = "gemini-2.5-flash",
     max_tokens: int | None = None,
-    max_retries: int = 2,
+    max_retries: int = 5,
     timeout: int | None = None,
 ) -> ChatGoogleGenerativeAI:
     """

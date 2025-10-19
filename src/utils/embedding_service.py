@@ -1,6 +1,6 @@
 """Service for generating embeddings using Google Gemini."""
 
-import google.generativeai as genai
+import google.genai as genai
 from typing import List, Optional
 from functools import lru_cache
 import os
@@ -23,11 +23,12 @@ class GeminiEmbeddingService:
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment")
 
-        genai.configure(api_key=api_key)
-        self.model = 'models/embedding-001'
-        self.dimension = 768  # Gemini embedding dimension
+        # Use new free SDK
+        self.client = genai.Client(api_key=api_key)
+        self.model = 'gemini-embedding-001'
+        self.dimension = 3072  # Gemini embedding dimension (new SDK)
 
-        print(f"[EMBEDDINGS] Using Gemini {self.model} with {self.dimension} dimensions")
+        print(f"[EMBEDDINGS] Using Gemini {self.model} with {self.dimension} dimensions (new free SDK)")
 
     @lru_cache(maxsize=1000)
     def get_embedding(self, text: str) -> List[float]:
@@ -42,12 +43,11 @@ class GeminiEmbeddingService:
             List of 768 floats
         """
         try:
-            result = genai.embed_content(
+            result = self.client.models.embed_content(
                 model=self.model,
-                content=text,
-                task_type="retrieval_document"
+                contents=text
             )
-            return result['embedding']
+            return result.embeddings[0].values
         except Exception as e:
             print(f"[ERROR] Gemini embedding failed: {e}")
             # Return zero vector as fallback

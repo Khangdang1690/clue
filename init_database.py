@@ -23,7 +23,7 @@ def ensure_tables_exist():
         while retries > 0:
             try:
                 DatabaseManager.initialize()
-                print("    ✓ Connected successfully")
+                print("    [OK] Connected successfully")
                 break
             except Exception as e:
                 retries -= 1
@@ -36,7 +36,7 @@ def ensure_tables_exist():
         # Create tables if they don't exist (idempotent)
         print("\n[2] Ensuring tables exist...")
         DatabaseManager.create_all_tables()
-        print("    ✓ All tables ready")
+        print("    [OK] All tables ready")
 
         print("\n" + "="*80)
         print("[SUCCESS] DATABASE READY")

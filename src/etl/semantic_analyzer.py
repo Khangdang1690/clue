@@ -91,23 +91,23 @@ Generate table name:""")
             ("system", """You are an expert data analyst performing semantic analysis.
 
 Analyze the dataset and return a JSON object with:
-{
+{{
   "domain": "Finance|Marketing|Sales|HR|Operations|Product|Support|Other",
   "department": "specific department name or null",
   "description": "1-2 sentence description of what this data represents",
   "entities": ["list", "of", "business", "entities", "found"],
-  "business_terms": {"column_name": "business meaning", ...},
+  "business_terms": {{"column_name": "business meaning", ...}},
   "suggested_questions": ["What insights could be found?", ...],
-  "column_semantics": {
-    "column_name": {
+  "column_semantics": {{
+    "column_name": {{
       "semantic_type": "dimension|measure|key|text|date",
       "business_meaning": "what this column represents",
       "is_primary_key": true/false,
       "is_foreign_key": true/false,
       "potential_relationships": ["other_column_names_it_might_relate_to"]
-    }
-  }
-}
+    }}
+  }}
+}}
 
 semantic_type definitions:
 - dimension: categorical attribute (customer name, product category, region)
@@ -140,7 +140,17 @@ Analyze this dataset:""")
 
         # Parse JSON response
         try:
-            analysis = json.loads(result.content.strip())
+            # Strip markdown code blocks if present
+            content = result.content.strip()
+            if content.startswith('```json'):
+                content = content[7:]  # Remove ```json
+            if content.startswith('```'):
+                content = content[3:]  # Remove ```
+            if content.endswith('```'):
+                content = content[:-3]  # Remove trailing ```
+            content = content.strip()
+
+            analysis = json.loads(content)
         except json.JSONDecodeError as e:
             print(f"[WARN] Failed to parse LLM response: {e}")
             print(f"Response: {result.content[:500]}")
@@ -240,14 +250,14 @@ Given a domain and available columns, suggest 3-5 valuable KPIs.
 
 Return JSON array:
 [
-  {
+  {{
     "name": "KPI Name",
     "description": "What it measures",
     "formula": "How to calculate (using column names)",
     "unit": "$|%|count|ratio",
     "required_columns": ["col1", "col2"],
     "importance": "high|medium|low"
-  }
+  }}
 ]
 
 Focus on actionable KPIs relevant to the domain.

@@ -1,0 +1,306 @@
+{
+  "metadata": {
+    "dataset_name": "product_performance",
+    "total_insights": 6,
+    "generated_date": "2025-10-18 22:39:13",
+    "domain": "Unknown",
+    "dataset_type": "Data Analysis"
+  },
+  "visualizations": [
+    {
+      "insight_id": 2,
+      "title": "Execution 2",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Services",
+          "Hardware",
+          "Software"
+        ],
+        "x_label": "Product Category",
+        "y_label": "Total Profit (USD)",
+        "datasets": [
+          {
+            "label": "Total Profit",
+            "data": [
+              502911,
+              145320,
+              122722
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 2"
+    },
+    {
+      "insight_id": 3,
+      "title": "Execution 3",
+      "chart_type": "bar",
+      "data": {
+        "chart_type": "bar",
+        "labels": [
+          "Services",
+          "Hardware",
+          "Software"
+        ],
+        "x_label": "Product Category",
+        "y_label": "Average Profit Margin (%)",
+        "datasets": [
+          {
+            "label": "Average Profit Margin",
+            "data": [
+              51.932857142857145,
+              80.48,
+              39.81
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 3"
+    },
+    {
+      "insight_id": 5,
+      "title": "Execution 5",
+      "chart_type": "heatmap",
+      "data": {
+        "chart_type": "heatmap",
+        "labels": [
+          "units_sold",
+          "revenue",
+          "cost",
+          "customer_rating",
+          "profit",
+          "profit_margin"
+        ],
+        "x_label": "Metrics",
+        "y_label": "Metrics",
+        "datasets": [
+          {
+            "label": "units_sold",
+            "data": [
+              1.0,
+              -0.019301478826087216,
+              -0.08011596812254776,
+              -0.47886645987203413,
+              0.020508853921515694,
+              0.1856459457326372
+            ]
+          },
+          {
+            "label": "revenue",
+            "data": [
+              -0.019301478826087216,
+              1.0,
+              0.19932441472045245,
+              0.15049735300207776,
+              0.8767553967449838,
+              0.6635135589288125
+            ]
+          },
+          {
+            "label": "cost",
+            "data": [
+              -0.08011596812254776,
+              0.19932441472045245,
+              1.0,
+              -0.34595118791989293,
+              -0.2965271175313368,
+              -0.5677728381157555
+            ]
+          },
+          {
+            "label": "customer_rating",
+            "data": [
+              -0.47886645987203413,
+              0.15049735300207776,
+              -0.34595118791989293,
+              1.0,
+              0.31645943840180996,
+              0.2755209060501318
+            ]
+          },
+          {
+            "label": "profit",
+            "data": [
+              0.020508853921515694,
+              0.8767553967449838,
+              -0.2965271175313368,
+              0.31645943840180996,
+              1.0,
+              0.925302005085449
+            ]
+          },
+          {
+            "label": "profit_margin",
+            "data": [
+              0.1856459457326372,
+              0.6635135589288125,
+              -0.5677728381157555,
+              0.2755209060501318,
+              0.925302005085449,
+              1.0
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 5"
+    },
+    {
+      "insight_id": 7,
+      "title": "Execution 7",
+      "chart_type": "scatter",
+      "data": {
+        "chart_type": "scatter",
+        "labels": [
+          "PROD_001",
+          "PROD_002",
+          "PROD_003",
+          "PROD_004",
+          "PROD_005",
+          "PROD_006",
+          "PROD_007",
+          "PROD_008",
+          "PROD_009",
+          "PROD_010"
+        ],
+        "x_label": "Units Sold",
+        "y_label": "Profit (USD)",
+        "datasets": [
+          {
+            "label": "All Products - Units Sold",
+            "data": [
+              192,
+              771,
+              160,
+              733,
+              150,
+              502,
+              888,
+              104,
+              565,
+              703
+            ]
+          },
+          {
+            "label": "All Products - Profit",
+            "data": [
+              41263,
+              33044,
+              19740,
+              88764,
+              37175,
+              145320,
+              81459,
+              157501,
+              114204,
+              52483
+            ]
+          },
+          {
+            "label": "Highlighted Products - Units Sold",
+            "data": [
+              771,
+              703
+            ]
+          },
+          {
+            "label": "Highlighted Products - Profit",
+            "data": [
+              33044,
+              52483
+            ]
+          },
+          {
+            "label": "Highlighted Products - Product ID",
+            "data": [
+              "PROD_002",
+              "PROD_010"
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 7"
+    },
+    {
+      "insight_id": 10,
+      "title": "Execution 10",
+      "chart_type": "scatter",
+      "data": {
+        "chart_type": "scatter",
+        "labels": [
+          3.0,
+          3.2,
+          3.5,
+          3.8,
+          4.1,
+          4.2,
+          4.5,
+          4.7,
+          4.8,
+          5.0
+        ],
+        "x_label": "Customer Rating",
+        "y_label": "Average Profit (USD)",
+        "datasets": [
+          {
+            "label": "Average Profit",
+            "data": [
+              33044.0,
+              88764.0,
+              114204.0,
+              41263.0,
+              81459.0,
+              37175.0,
+              52483.0,
+              19740.0,
+              157501.0,
+              145320.0
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 10"
+    },
+    {
+      "insight_id": 11,
+      "title": "Execution 11",
+      "chart_type": "scatter",
+      "data": {
+        "chart_type": "scatter",
+        "labels": [
+          3.0,
+          3.2,
+          3.5,
+          3.8,
+          4.1,
+          4.2,
+          4.5,
+          4.7,
+          4.8,
+          5.0
+        ],
+        "x_label": "Customer Rating",
+        "y_label": "Average Profit Margin (%)",
+        "datasets": [
+          {
+            "label": "Average Profit Margin",
+            "data": [
+              38.13,
+              68.68,
+              57.15,
+              26.96,
+              52.66,
+              41.42,
+              51.58,
+              27.02,
+              79.55,
+              80.48
+            ]
+          }
+        ]
+      },
+      "description": "Visualization from code execution 11"
+    }
+  ]
+}
