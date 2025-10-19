@@ -13,6 +13,7 @@ from .base_models import (
 from src.utils.llm_client import get_llm
 from langchain.prompts import PromptTemplate
 import json
+import numpy as np
 
 
 class BusinessInsightSynthesizer:
@@ -160,11 +161,27 @@ IMPORTANT:
 """)
 
         rel = relationships[0]
+
+        # Convert relationships to JSON-serializable format
+        json_relationships = []
+        for r in relationships:
+            json_rel = {}
+            for k, v in r.items():
+                if isinstance(v, bool):
+                    json_rel[k] = bool(v)  # Ensure it's a Python bool
+                elif isinstance(v, np.bool_):
+                    json_rel[k] = bool(v)  # Convert numpy bool to Python bool
+                elif isinstance(v, (np.integer, np.floating)):
+                    json_rel[k] = float(v)  # Convert numpy numbers to Python floats
+                else:
+                    json_rel[k] = v
+            json_relationships.append(json_rel)
+
         input_data = {
-            'relationships': json.dumps(relationships, indent=2),
+            'relationships': json.dumps(json_relationships, indent=2, default=str),
             'confidence_level': validation.confidence_level.value,
             'sample_size': validation.sample_size,
-            'context': json.dumps(context, indent=2) if context else "No additional context",
+            'context': json.dumps(context, indent=2, default=str) if context else "No additional context",
             'strength': rel.get('strength', 'unknown').upper()
         }
 

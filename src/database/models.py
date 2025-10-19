@@ -39,11 +39,18 @@ class Dataset(Base):
     file_type = Column(String, nullable=False)  # csv, excel, json, parquet
     file_path = Column(String, nullable=False)
 
-    # Semantic info (from LLM)
+    # Semantic info (from LLM) - UNIFIED CONTEXT
+    # Basic identification
     domain = Column(String)  # Finance, Marketing, Sales, HR, Operations
     department = Column(String)
-    description = Column(Text)
+    description = Column(Text)  # General description
     entities = Column(JSON)  # ["Customer", "Product", "Transaction"]
+
+    # Business context (Discovery-style fields)
+    dataset_type = Column(String)  # Specific type: "Stock prices", "Customer transactions", etc.
+    time_period = Column(String)  # Time range: "2020-2023", "Q4 2023", etc.
+    typical_use_cases = Column(JSON)  # ["Revenue forecasting", "Customer segmentation"]
+    business_context = Column(JSON)  # {"Revenue": "Income from sales", "COGS": "Cost of goods sold"}
 
     # Embeddings (Gemini 3072 dimensions - new free SDK)
     description_embedding = Column(Vector(EMBEDDING_DIM))  # Semantic embedding of description

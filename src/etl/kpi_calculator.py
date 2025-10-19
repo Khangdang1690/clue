@@ -147,7 +147,7 @@ class KPICalculator:
     }
 
     def __init__(self):
-        self.llm = get_llm(temperature=0.0, model="gemini-2.0-flash")
+        self.llm = get_llm(temperature=0.0, model="gemini-2.5-flash")
         self.embedding_service = get_embedding_service()
 
     def identify_kpis(
@@ -339,14 +339,14 @@ Given a domain and available columns, suggest 2-3 derived KPIs that would be val
 
 Return JSON array:
 [
-  {
+  {{
     "name": "KPI Name",
     "required_columns": ["col1", "col2"],
     "formula": "mathematical formula using df['column'] syntax",
     "aggregation": "sum|mean",
     "unit": "$|%|count|x|ratio",
     "description": "What this KPI measures"
-  }
+  }}
 ]
 
 Rules:

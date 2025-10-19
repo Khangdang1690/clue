@@ -31,6 +31,7 @@ class ETLState(TypedDict):
 
     # Step 6: Storage
     dataset_ids: Dict[str, str]  # {file_id: dataset_id in DB}
+    company_id: str  # Company ID from database
 
     # Status tracking
     status: str  # pending, running, completed, error

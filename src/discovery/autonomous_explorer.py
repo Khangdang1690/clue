@@ -79,7 +79,8 @@ class AutonomousExplorer:
         self,
         df: pd.DataFrame,
         dataset_name: str,
-        dataset_context: Optional[Dict] = None
+        dataset_context: Optional[Dict] = None,
+        skip_visualizations: bool = False  # NEW: Skip viz generation for multi-table analysis
     ) -> ExplorationResult:
         """
         Autonomously explore dataset and generate insights.
@@ -88,6 +89,7 @@ class AutonomousExplorer:
             df: DataFrame to explore
             dataset_name: Name of dataset
             dataset_context: Context from outer agent (domain, entities, etc.)
+            skip_visualizations: If True, skip visualization generation (for multi-table analysis)
 
         Returns:
             ExplorationResult with discovered insights
@@ -102,21 +104,26 @@ class AutonomousExplorer:
             print(f"Domain: {dataset_context.get('domain', 'Unknown')}")
             print(f"Dataset Type: {dataset_context.get('dataset_type', 'Unknown')}")
 
-        # Create visualization output directory
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        viz_dir = os.path.join("data", "outputs", "discovery", "visualizations", f"{dataset_name}_{timestamp}")
-        os.makedirs(viz_dir, exist_ok=True)
-        print(f"Visualization directory: {viz_dir}")
+        if skip_visualizations:
+            print("⚡ Skipping visualizations (multi-table mode)")
+            viz_dir = None
+            viz_data_store = None
+        else:
+            # Create visualization output directory
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            viz_dir = os.path.join("data", "outputs", "discovery", "visualizations", f"{dataset_name}_{timestamp}")
+            os.makedirs(viz_dir, exist_ok=True)
+            print(f"Visualization directory: {viz_dir}")
 
-        # Create visualization data store for incremental JSON writing
-        viz_data_store = VisualizationDataStore(
-            dataset_name=dataset_name,
-            dataset_context=dataset_context
-        )
-        print(f"Viz data JSON: {viz_data_store.get_json_path()}")
+            # Create visualization data store for incremental JSON writing
+            viz_data_store = VisualizationDataStore(
+                dataset_name=dataset_name,
+                dataset_context=dataset_context
+            )
+            print(f"Viz data JSON: {viz_data_store.get_json_path()}")
 
-        # Create tools with visualization support
+        # Create tools with visualization support (or None if skipped)
         python_tool = PythonExecutorTool(df=df, viz_output_dir=viz_dir, viz_data_store=viz_data_store)
         summary_tool = DataSummaryTool(df=df)
         profile_tool = DataProfileTool(df=df)
@@ -124,7 +131,7 @@ class AutonomousExplorer:
         tools = [python_tool, summary_tool, profile_tool]
 
         # Create ReAct agent
-        agent = self._create_agent(tools, dataset_context)
+        agent = self._create_agent(tools, dataset_context, skip_visualizations)
         agent_executor = AgentExecutor(
             agent=agent,
             tools=tools,
@@ -132,12 +139,12 @@ class AutonomousExplorer:
             max_iterations=self.max_iterations,
             handle_parsing_errors=True,
             return_intermediate_steps=True,
-            early_stopping_method="generate",  # Force agent to generate output even if max_iterations hit
+            early_stopping_method="force",  # Force agent to return output even if max_iterations hit
             max_execution_time=600  # 10 minute timeout
         )
 
         # Create exploration goal
-        goal = self._create_exploration_goal(dataset_name, dataset_context, df)
+        goal = self._create_exploration_goal(dataset_name, dataset_context, df, skip_visualizations)
 
         print("\n[GOAL] Exploration Goal:")
         print(goal)
@@ -155,8 +162,9 @@ class AutonomousExplorer:
                 viz_dir
             )
 
-            # Finalize visualization data store
-            viz_data_store.finalize()
+            # Finalize visualization data store (only if visualizations were generated)
+            if viz_data_store is not None:
+                viz_data_store.finalize()
 
             # Create exploration result
             exploration_result = ExplorationResult(
@@ -166,7 +174,7 @@ class AutonomousExplorer:
                 exploration_summary=result.get("output", ""),
                 dataset_context=dataset_context,
                 viz_directory=viz_dir,
-                viz_data_path=viz_data_store.get_json_path()
+                viz_data_path=viz_data_store.get_json_path() if viz_data_store else None
             )
 
             print("\n" + "="*80)
@@ -193,7 +201,7 @@ class AutonomousExplorer:
                 dataset_context=dataset_context
             )
 
-    def _create_agent(self, tools: List, dataset_context: Optional[Dict]) -> Any:
+    def _create_agent(self, tools: List, dataset_context: Optional[Dict], skip_visualizations: bool = False) -> Any:
         """Create ReAct agent with appropriate prompt."""
 
         # Build context description
@@ -274,17 +282,11 @@ IMPORTANT WORKFLOW:
    - Process for each insight:
      a) Execute MULTIPLE code blocks to thoroughly analyze the data
      b) Review the numbers/results from each execution
-     c) Create one or MORE visualizations to support the insight
-     d) ONLY THEN write "### Insight N: [Title]" with the validated finding
+     c) ONLY THEN write "### Insight N: [Title]" with the validated finding
    - IMPORTANT: One insight typically requires 3-5+ code executions:
      * First execution: Explore and understand the pattern
      * Second execution: Calculate specific metrics and numbers
-     * Third execution: Create visualization(s)
-     * Fourth+ execution: Validate with different angles or time periods
-   - One insight should have MULTIPLE visualizations when relevant:
-     * Example: For revenue growth - create both a line chart AND a bar chart
-     * Example: For correlations - create scatter plot AND heatmap
-     * Multiple charts provide richer understanding
+     * Third+ execution: Validate with different angles or time periods
    - If code shows the insight is wrong, don't write it - try a different analysis
 
 5. QUALITY OVER QUANTITY:
@@ -293,78 +295,7 @@ IMPORTANT WORKFLOW:
    - Don't be afraid to make mistakes during exploration - if code has errors, debug it and try again
    - When you're confident you've found all meaningful insights, provide a Final Answer summarizing them
 
-VISUALIZATION GUIDELINES:
-- Create MULTIPLE visualizations per insight to provide comprehensive understanding
-- The variable VIZ_DIR is already available - DO NOT import os or create directories
-- Save visualizations using: plt.savefig(f'{{VIZ_DIR}}/insight_N_descriptive_name.png', bbox_inches='tight', dpi=100)
-- Choose appropriate chart types:
-  * Line charts: For trends over time (revenue growth, seasonal patterns)
-  * Bar charts: For comparisons between categories (department performance, segment analysis)
-  * Scatter plots: For correlations between variables
-  * Heatmaps: For correlation matrices or cross-tabulations
-- Always close plots after saving: plt.close()
-- CRITICAL: ALWAYS save visualization data for interactive dashboards
-  After EVERY chart you create, store the data in result dict with PROPER AXIS LABELS:
-  ```python
-  result = {{
-      'chart_type': 'bar',  # or 'line', 'scatter', 'pie', etc.
-      'labels': ['Q1', 'Q2', 'Q3', 'Q4'],  # X-axis values
-      'x_label': 'Fiscal Quarter',  # REQUIRED: X-axis label
-      'y_label': 'Revenue (USD Millions)',  # REQUIRED: Y-axis label
-      'datasets': [
-          {{'label': 'Revenue', 'data': [100, 120, 150, 180]}},
-          {{'label': 'Profit', 'data': [20, 25, 30, 35]}}  # Multiple datasets if comparing
-      ]
-  }}
-  ```
-- Example: Creating multiple visualizations for one insight
-  ```python
-  import matplotlib.pyplot as plt
-  import seaborn as sns
-  # VIZ_DIR is already available
-
-  # Visualization 1: Line chart showing trend
-  labels = ['2020', '2021', '2022', '2023']
-  revenue = [100, 145, 153, 161]
-
-  plt.figure(figsize=(10, 6))
-  plt.plot(labels, revenue, marker='o', linewidth=2)
-  plt.title('Revenue Growth 2020-2023')
-  plt.xlabel('Fiscal Year')
-  plt.ylabel('Revenue (USD Millions)')
-  plt.grid(True, alpha=0.3)
-  plt.savefig(f'{{VIZ_DIR}}/insight_1_revenue_trend.png', bbox_inches='tight', dpi=100)
-  plt.close()
-
-  result = {{
-      'chart_type': 'line',
-      'labels': labels,
-      'x_label': 'Fiscal Year',
-      'y_label': 'Revenue (USD Millions)',
-      'datasets': [{{'label': 'Revenue', 'data': revenue}}]
-  }}
-
-  # Visualization 2: Bar chart showing YoY growth rates
-  growth_rates = [45.0, 5.5, 5.2]  # calculated from revenue
-  growth_labels = ['2020-21', '2021-22', '2022-23']
-
-  plt.figure(figsize=(10, 6))
-  plt.bar(growth_labels, growth_rates, color=['#4caf50', '#ff9800', '#f44336'])
-  plt.title('Year-over-Year Growth Rate')
-  plt.xlabel('Period')
-  plt.ylabel('Growth Rate (%)')
-  plt.grid(axis='y', alpha=0.3)
-  plt.savefig(f'{{VIZ_DIR}}/insight_1_yoy_growth.png', bbox_inches='tight', dpi=100)
-  plt.close()
-
-  result = {{
-      'chart_type': 'bar',
-      'labels': growth_labels,
-      'x_label': 'Period',
-      'y_label': 'Growth Rate (%)',
-      'datasets': [{{'label': 'YoY Growth %', 'data': growth_rates}}]
-  }}
-  ```
+{visualization_guidelines}
 
 INSIGHT VALIDATION EXAMPLES:
 
@@ -485,10 +416,25 @@ Question: {input}
 Thought: {agent_scratchpad}
 """
 
+        # Conditionally add visualization guidelines
+        if skip_visualizations:
+            # Multi-table mode - NO visualizations
+            visualization_guidelines = """
+NOTE: Visualizations are DISABLED for this analysis (multi-table mode).
+- DO NOT attempt to create any charts or plots
+- DO NOT use VIZ_DIR (it is not available)
+- Focus ONLY on data analysis, calculations, and numerical insights
+- Save analysis results in the 'result' variable for each execution
+"""
+        else:
+            # Single-table mode - visualizations enabled
+            visualization_guidelines = ""  # Handled by goal prompt
+
         prompt = PromptTemplate.from_template(template)
         prompt = prompt.partial(
             context_desc=context_desc,
-            max_insights=self.max_insights
+            max_insights=self.max_insights,
+            visualization_guidelines=visualization_guidelines
         )
 
         return create_react_agent(self.llm, tools, prompt)
@@ -497,7 +443,8 @@ Thought: {agent_scratchpad}
         self,
         dataset_name: str,
         dataset_context: Optional[Dict],
-        df: pd.DataFrame
+        df: pd.DataFrame,
+        skip_visualizations: bool = False
     ) -> str:
         """Create exploration goal based on context."""
 
@@ -530,9 +477,13 @@ Thought: {agent_scratchpad}
 
         goal_parts.append("\nFor each insight:")
         goal_parts.append("  - Execute 3-5+ code blocks to thoroughly validate")
-        goal_parts.append("  - Create 2+ visualizations from different angles")
+
+        # Only include visualization instructions if not skipped
+        if not skip_visualizations:
+            goal_parts.append("  - Create 2+ visualizations from different angles")
+            goal_parts.append("  - Include proper axis labels (x_label, y_label) in viz data")
+
         goal_parts.append("  - Provide clear business explanation with specific numbers")
-        goal_parts.append("  - Include proper axis labels (x_label, y_label) in viz data")
         goal_parts.append("  - Explain why it matters to the business")
 
         return "\n".join(goal_parts)
@@ -674,13 +625,13 @@ Thought: {agent_scratchpad}
         Scan visualization directory for generated image files.
 
         Args:
-            viz_dir: Directory to scan
+            viz_dir: Directory to scan (can be None if visualizations skipped)
 
         Returns:
             List of absolute paths to visualization files
         """
         viz_files = []
-        if os.path.exists(viz_dir):
+        if viz_dir and os.path.exists(viz_dir):
             for file in os.listdir(viz_dir):
                 if file.endswith(('.png', '.jpg', '.jpeg', '.svg', '.html')):
                     viz_files.append(os.path.join(viz_dir, file))

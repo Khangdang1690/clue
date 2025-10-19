@@ -88,16 +88,28 @@ Generate table name:""")
         sample_data = df.head(20).to_string()
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an expert data analyst performing semantic analysis.
+            ("system", """You are an expert data analyst performing comprehensive semantic analysis.
 
-Analyze the dataset and return a JSON object with:
+Analyze the dataset and return a JSON object with UNIFIED CONTEXT (combining technical and business understanding):
+
 {{
   "domain": "Finance|Marketing|Sales|HR|Operations|Product|Support|Other",
   "department": "specific department name or null",
-  "description": "1-2 sentence description of what this data represents",
+  "description": "1-2 sentence general description of what this data represents",
   "entities": ["list", "of", "business", "entities", "found"],
+  "dataset_type": "specific type of data (e.g., Stock prices, Customer transactions, Marketing campaigns, etc.)",
+  "time_period": "time range if temporal data (e.g., '2020-2023', 'Q4 2023', 'Monthly 2022-2024') or null",
+  "typical_use_cases": ["use case 1", "use case 2", "use case 3"],
+  "business_context": {{
+    "key_business_term_1": "plain English explanation",
+    "key_business_term_2": "plain English explanation"
+  }},
   "business_terms": {{"column_name": "business meaning", ...}},
-  "suggested_questions": ["What insights could be found?", ...],
+  "suggested_questions": [
+    "Domain-specific question 1",
+    "Domain-specific question 2",
+    "Domain-specific question 3"
+  ],
   "column_semantics": {{
     "column_name": {{
       "semantic_type": "dimension|measure|key|text|date",
@@ -109,17 +121,31 @@ Analyze the dataset and return a JSON object with:
   }}
 }}
 
-semantic_type definitions:
-- dimension: categorical attribute (customer name, product category, region)
-- measure: numeric metric to aggregate (revenue, quantity, price)
-- key: identifier (customer_id, order_id, product_id)
-- text: free text (description, comments, notes)
-- date: temporal data (date, timestamp, year, month)
+IMPORTANT GUIDELINES:
 
-Identify ALL columns that end with _id or contain 'id' as likely keys.
-Look for relationships between tables based on column names.
+1. semantic_type definitions:
+   - dimension: categorical attribute (customer name, product category, region)
+   - measure: numeric metric to aggregate (revenue, quantity, price)
+   - key: identifier (customer_id, order_id, product_id)
+   - text: free text (description, comments, notes)
+   - date: temporal data (date, timestamp, year, month)
 
-Return ONLY valid JSON, no explanations."""),
+2. Identify ALL columns that end with _id or contain 'id' as likely keys.
+
+3. Make suggested_questions SPECIFIC to the domain, not generic:
+   - For sales data: "Which products have highest revenue in Q4?"
+   - For customer data: "What customer segments have highest lifetime value?"
+   - For marketing data: "Which campaigns had best ROI?"
+
+4. business_context should explain domain-specific terms:
+   - For finance: "EBITDA", "Profit Margin", "Working Capital"
+   - For marketing: "CTR", "Conversion Rate", "CAC"
+
+5. typical_use_cases should be concrete business activities:
+   - "Revenue forecasting for next quarter"
+   - "Customer churn prediction"
+
+Return ONLY valid JSON, no explanations or markdown."""),
             ("user", """Table name: {table_name}
 
 Schema:
@@ -128,7 +154,7 @@ Schema:
 Sample data:
 {sample}
 
-Analyze this dataset:""")
+Analyze this dataset and provide comprehensive unified context:""")
         ])
 
         chain = prompt | self.llm
@@ -154,12 +180,16 @@ Analyze this dataset:""")
         except json.JSONDecodeError as e:
             print(f"[WARN] Failed to parse LLM response: {e}")
             print(f"Response: {result.content[:500]}")
-            # Return minimal analysis
+            # Return minimal analysis with all unified fields
             analysis = {
                 'domain': 'Unknown',
                 'department': None,
                 'description': f"Dataset from {table_name}",
                 'entities': [],
+                'dataset_type': None,
+                'time_period': None,
+                'typical_use_cases': [],
+                'business_context': {},
                 'business_terms': {},
                 'suggested_questions': [],
                 'column_semantics': {}

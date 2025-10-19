@@ -1,6 +1,7 @@
 """LangGraph workflow for multi-dataset ETL with embeddings."""
 
 from typing import Dict, List, Any
+from pathlib import Path
 from langgraph.graph import StateGraph, END
 import pandas as pd
 from src.models.etl_models import ETLState
@@ -93,6 +94,7 @@ class ETLWorkflow:
             'kpi_definitions': {},
             'calculated_kpis': {},
             'dataset_ids': {},
+            'company_id': '',  # Will be set after company is created
             'status': 'pending',
             'error_message': '',
             'current_step': 'initialization'
@@ -145,6 +147,7 @@ class ETLWorkflow:
                 state['file_metadata'][file_id] = metadata
 
             print(f"[OK] Loaded {len(state['raw_dataframes'])} datasets")
+            print(f"  File IDs: {list(state['raw_dataframes'].keys())}")
 
         except Exception as e:
             state['status'] = 'error'
@@ -185,11 +188,25 @@ class ETLWorkflow:
             print(f"[OK] Analyzed {len(state['semantic_metadata'])} datasets")
 
         except Exception as e:
-            state['status'] = 'error'
-            state['error_message'] = f"Semantic analysis failed: {e}"
-            print(f"[ERROR] Semantic analysis failed: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[WARN] Semantic analysis failed: {e}")
+
+            # Create fallback metadata for missing files
+            for file_id, df in state['raw_dataframes'].items():
+                if file_id not in state['semantic_metadata']:
+                    file_meta = state['file_metadata'][file_id]
+                    # Create minimal fallback metadata
+                    table_name = Path(file_meta['file_name']).stem.replace('_', ' ').title().replace(' ', '_').lower()
+                    state['semantic_metadata'][file_id] = {
+                        'table_name': table_name,
+                        'domain': 'Unknown',
+                        'description': f"Dataset from {file_meta['file_name']}",
+                        'entities': [],
+                        'column_semantics': {},
+                        'suggested_kpis': []
+                    }
+                    print(f"  [FALLBACK] Created metadata for {table_name}")
+
+            print(f"[WARN] Using fallback metadata for {len(state['raw_dataframes'])} datasets")
 
         return state
 
@@ -209,13 +226,16 @@ class ETLWorkflow:
                 )
 
                 state['relationships'] = relationships
+                print(f"[OK] Found {len(relationships)} confirmed relationships")
 
                 # Print detected relationships
                 for rel in relationships:
                     from_table = state['semantic_metadata'][rel['from_dataset_id']].get('table_name', 'unknown')
                     to_table = state['semantic_metadata'][rel['to_dataset_id']].get('table_name', 'unknown')
-                    print(f"  Found: {from_table}.{rel['from_column']} → {to_table}.{rel['to_column']} "
+                    print(f"  - {from_table}.{rel['from_column']} → {to_table}.{rel['to_column']} "
                           f"(confidence: {rel['confidence']:.2f})")
+
+                print(f"  State now has {len(state['relationships'])} relationships")
 
         except Exception as e:
             print(f"[WARN] Relationship detection failed: {e}")
@@ -236,17 +256,33 @@ class ETLWorkflow:
                     if r.get('from_dataset_id') == file_id or r.get('to_dataset_id') == file_id
                 ]
 
+                # Get semantic metadata or create fallback
+                if file_id in state['semantic_metadata']:
+                    semantic_meta = state['semantic_metadata'][file_id]
+                else:
+                    # Fallback when semantic analysis fails (e.g., API quota)
+                    file_meta = state['file_metadata'][file_id]
+                    semantic_meta = {
+                        'table_name': Path(file_meta['file_name']).stem.replace('_', ' ').title().replace(' ', '_').lower(),
+                        'domain': 'Unknown',
+                        'description': f"Dataset from {file_meta['file_name']}",
+                        'entities': [],
+                        'column_semantics': {}
+                    }
+                    state['semantic_metadata'][file_id] = semantic_meta
+                    print(f"  [WARN] Using fallback metadata for {file_id}")
+
                 # Clean
                 cleaned_df, report = self.adaptive_cleaner.clean_dataset(
                     df,
-                    state['semantic_metadata'][file_id],
+                    semantic_meta,
                     dataset_rels,
                     file_id
                 )
 
                 state['cleaned_dataframes'][file_id] = cleaned_df
                 state['cleaning_reports'][file_id] = report
-                print(f"  Cleaned {state['semantic_metadata'][file_id]['table_name']}: {len(cleaned_df)} rows")
+                print(f"  Cleaned {semantic_meta['table_name']}: {len(cleaned_df)} rows")
 
             print(f"[OK] Cleaned {len(state['cleaned_dataframes'])} datasets")
 
@@ -297,6 +333,7 @@ class ETLWorkflow:
         """Node 6: Store everything to PostgreSQL with embeddings."""
         state['current_step'] = 'storage'
         print("\n[STEP 6/6] STORING TO DATABASE")
+        print(f"  Relationships in state: {len(state.get('relationships', []))}")
 
         try:
             with DatabaseManager.get_session() as session:
@@ -307,14 +344,18 @@ class ETLWorkflow:
                 )
                 print(f"  Company: {company.name} (ID: {company.id})")
 
+                # Store company_id in state for downstream use
+                state['company_id'] = str(company.id)
+
                 # Store each dataset
+                print(f"  Files to store: {list(state['cleaned_dataframes'].keys())}")
                 for file_id, df in state['cleaned_dataframes'].items():
                     file_meta = state['file_metadata'][file_id]
                     semantic_meta = state['semantic_metadata'][file_id]
 
                     print(f"  Storing {semantic_meta['table_name']}...")
 
-                    # Create dataset record with embeddings
+                    # Create dataset record with embeddings and unified context
                     dataset = DatasetRepository.create_dataset(
                         session=session,
                         company_id=company.id,
@@ -327,7 +368,12 @@ class ETLWorkflow:
                         description=semantic_meta.get('description'),
                         entities=semantic_meta.get('entities'),
                         description_embedding=semantic_meta.get('description_embedding'),
-                        schema_embedding=semantic_meta.get('schema_embedding')
+                        schema_embedding=semantic_meta.get('schema_embedding'),
+                        # New unified context fields
+                        dataset_type=semantic_meta.get('dataset_type'),
+                        time_period=semantic_meta.get('time_period'),
+                        typical_use_cases=semantic_meta.get('typical_use_cases'),
+                        business_context=semantic_meta.get('business_context')
                     )
 
                     # Store column metadata with embeddings
@@ -383,11 +429,24 @@ class ETLWorkflow:
                     print(f"    Stored as {table_name}: {len(df):,} rows × {len(df.columns)} columns")
 
                 # Store relationships
-                for rel in state['relationships']:
-                    from_dataset_id = state['dataset_ids'].get(rel['from_dataset_id'])
-                    to_dataset_id = state['dataset_ids'].get(rel['to_dataset_id'])
+                print(f"  Storing {len(state['relationships'])} relationships...")
+                print(f"    Dataset ID mapping: {list(state['dataset_ids'].keys())}")
+
+                for i, rel in enumerate(state['relationships']):
+                    # The relationships use file IDs (e.g., 'file_0'), not dataset IDs
+                    from_file_id = rel['from_dataset_id']
+                    to_file_id = rel['to_dataset_id']
+                    from_dataset_id = state['dataset_ids'].get(from_file_id)
+                    to_dataset_id = state['dataset_ids'].get(to_file_id)
+
+                    if i == 0:  # Debug first relationship
+                        print(f"    First rel: from={from_file_id} -> {from_dataset_id}, to={to_file_id} -> {to_dataset_id}")
 
                     if from_dataset_id and to_dataset_id:
+                        # Convert numpy types to Python native types
+                        confidence = float(rel['confidence'])
+                        match_pct = float(rel.get('match_percentage', 0))
+
                         RelationshipRepository.create_relationship(
                             session=session,
                             from_dataset_id=from_dataset_id,
@@ -395,10 +454,13 @@ class ETLWorkflow:
                             from_column=rel['from_column'],
                             to_column=rel['to_column'],
                             relationship_type=rel['relationship_type'],
-                            confidence=rel['confidence'],
-                            match_percentage=rel.get('match_percentage', 0),
+                            confidence=confidence,
+                            match_percentage=match_pct,
                             join_strategy=rel.get('join_strategy', 'left')
                         )
+                        print(f"    Saved: {rel['from_column']} -> {rel['to_column']} (conf: {confidence:.2f})")
+                    else:
+                        print(f"    Skipped relationship: from_id={from_file_id} ({from_dataset_id}), to_id={to_file_id} ({to_dataset_id})")
 
             state['status'] = 'completed'
             print("[OK] All data stored successfully")

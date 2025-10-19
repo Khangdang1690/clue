@@ -52,9 +52,14 @@ class DatasetRepository:
         description: Optional[str] = None,
         entities: Optional[List[str]] = None,
         description_embedding: Optional[List[float]] = None,
-        schema_embedding: Optional[List[float]] = None
+        schema_embedding: Optional[List[float]] = None,
+        # New unified context fields
+        dataset_type: Optional[str] = None,
+        time_period: Optional[str] = None,
+        typical_use_cases: Optional[List[str]] = None,
+        business_context: Optional[Dict] = None
     ) -> Dataset:
-        """Create a new dataset record."""
+        """Create a new dataset record with unified context."""
         dataset = Dataset(
             company_id=company_id,
             original_filename=original_filename,
@@ -66,7 +71,12 @@ class DatasetRepository:
             description=description,
             entities=entities or [],
             description_embedding=description_embedding,
-            schema_embedding=schema_embedding
+            schema_embedding=schema_embedding,
+            # New unified context fields
+            dataset_type=dataset_type,
+            time_period=time_period,
+            typical_use_cases=typical_use_cases or [],
+            business_context=business_context or {}
         )
         session.add(dataset)
         session.flush()
@@ -259,16 +269,21 @@ class SimilarityRepository:
         - Finding related datasets for cross-analysis
         - Suggesting datasets to include in analysis
         """
+        # Convert numpy array to list if necessary
+        import numpy as np
+        if isinstance(embedding, np.ndarray):
+            embedding = embedding.tolist()
+
         query = text("""
             SELECT
                 id,
                 table_name,
                 domain,
                 description,
-                1 - (description_embedding <=> :embedding::vector) as similarity
+                1 - (description_embedding <=> CAST(:embedding AS vector)) as similarity
             FROM datasets
-            WHERE 1 - (description_embedding <=> :embedding::vector) > :threshold
-            ORDER BY description_embedding <=> :embedding::vector
+            WHERE 1 - (description_embedding <=> CAST(:embedding AS vector)) > :threshold
+            ORDER BY description_embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
 
@@ -307,6 +322,11 @@ class SimilarityRepository:
         - Relationship detection
         - Finding equivalent metrics across departments
         """
+        # Convert numpy array to list if necessary
+        import numpy as np
+        if isinstance(embedding, np.ndarray):
+            embedding = embedding.tolist()
+
         query_parts = [
             """
             SELECT
@@ -315,10 +335,10 @@ class SimilarityRepository:
                 cm.column_name,
                 cm.business_meaning,
                 d.table_name,
-                1 - (cm.semantic_embedding <=> :embedding::vector) as similarity
+                1 - (cm.semantic_embedding <=> CAST(:embedding AS vector)) as similarity
             FROM column_metadata cm
             JOIN datasets d ON cm.dataset_id = d.id
-            WHERE 1 - (cm.semantic_embedding <=> :embedding::vector) > :threshold
+            WHERE 1 - (cm.semantic_embedding <=> CAST(:embedding AS vector)) > :threshold
             """
         ]
 
@@ -333,7 +353,7 @@ class SimilarityRepository:
             params['exclude_id'] = exclude_dataset_id
 
         query_parts.append("""
-            ORDER BY cm.semantic_embedding <=> :embedding::vector
+            ORDER BY cm.semantic_embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
 
@@ -376,9 +396,9 @@ class SimilarityRepository:
                 insight_text,
                 code_template,
                 confidence,
-                1 - (insight_embedding <=> :embedding::vector) as similarity
+                1 - (insight_embedding <=> CAST(:embedding AS vector)) as similarity
             FROM insight_patterns
-            WHERE 1 - (insight_embedding <=> :embedding::vector) > :threshold
+            WHERE 1 - (insight_embedding <=> CAST(:embedding AS vector)) > :threshold
             """
         ]
 
@@ -393,7 +413,7 @@ class SimilarityRepository:
             params['domain'] = domain
 
         query_parts.append("""
-            ORDER BY insight_embedding <=> :embedding::vector
+            ORDER BY insight_embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
 

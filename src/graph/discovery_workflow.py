@@ -1,6 +1,6 @@
 """LangGraph workflow for autonomous code-based discovery."""
 
-from typing import Dict
+from typing import Dict, Optional
 from langgraph.graph import StateGraph, END
 import pandas as pd
 from src.models.discovery_models import DiscoveryState, DiscoveryResult
@@ -28,7 +28,8 @@ class DiscoveryWorkflow:
         max_iterations: int = 15,
         max_insights: int = 10,
         confidence_threshold: float = 0.6,
-        generate_context: bool = True
+        generate_context: bool = True,
+        skip_visualizations: bool = False  # NEW: Skip viz for multi-table analysis
     ):
         """
         Initialize discovery workflow.
@@ -38,6 +39,7 @@ class DiscoveryWorkflow:
             max_insights: Maximum number of insights (not a fixed requirement)
             confidence_threshold: Minimum confidence for insights (deprecated)
             generate_context: Whether to generate dataset context (outer agent layer)
+            skip_visualizations: Whether to skip visualization generation (for multi-table)
         """
         # Dataset context generator (Outer agent layer)
         self.generate_context = generate_context
@@ -45,6 +47,9 @@ class DiscoveryWorkflow:
 
         # Data profiler (lightweight - just gets basic stats)
         self.profiler = DataProfiler(sample_size=100000)
+
+        # Store visualization preference
+        self.skip_visualizations = skip_visualizations
 
         # Autonomous explorer - handles data inspection, cleaning, and exploration
         self.explorer = AutonomousExplorer(
@@ -78,13 +83,19 @@ class DiscoveryWorkflow:
 
         return workflow.compile()
 
-    def run_discovery(self, df: pd.DataFrame, dataset_name: str) -> DiscoveryResult:
+    def run_discovery(
+        self,
+        df: pd.DataFrame,
+        dataset_name: str,
+        context: Optional[Dict] = None  # NEW: Accept unified context from ETL
+    ) -> DiscoveryResult:
         """
         Run the full autonomous discovery workflow.
 
         Args:
             df: DataFrame to analyze
             dataset_name: Name of the dataset
+            context: Optional unified context from ETL (includes domain, dataset_type, etc.)
 
         Returns:
             DiscoveryResult with insights
@@ -93,9 +104,15 @@ class DiscoveryWorkflow:
         print("[DISCOVERY] AUTONOMOUS DATA DISCOVERY")
         print("="*80)
         print("Using code-based exploration (not fixed algorithms)")
+
+        if context:
+            print(f"✓ Using context from ETL: {context.get('domain')} - {context.get('dataset_type')}")
+        else:
+            print("⚠ No context provided - will generate fresh context")
+
         print("="*80)
 
-        # Initialize state
+        # Initialize state with context from ETL
         initial_state: DiscoveryState = {
             "raw_data": df,
             "dataset_name": dataset_name,
@@ -120,8 +137,8 @@ class DiscoveryWorkflow:
             "max_questions": 10,
             "max_backtrack_attempts": 3,
             "confidence_threshold": 0.6,
-            # New fields
-            "dataset_context": None,
+            # Use context from ETL if available
+            "dataset_context": context,
             "context_summary": None,
             "cleaning_report": None,
             "exploration_result": None
@@ -143,13 +160,31 @@ class DiscoveryWorkflow:
     # Node implementations
 
     def _generate_context_node(self, state: DiscoveryState) -> DiscoveryState:
-        """Node 1: Generate dataset context (Outer agent layer)."""
+        """Node 1: Use context from ETL or generate new context."""
         state["current_phase"] = "context_generation"
         state["status"] = "in_progress"
 
         try:
-            if self.generate_context:
-                print("\n[CONTEXT] Generating dataset context...")
+            # Check if context was provided from ETL (unified context)
+            if state.get("dataset_context") is not None:
+                print("\n[CONTEXT] ✓ Using unified context from ETL")
+                dataset_context = state["dataset_context"]
+
+                # Store for report generation
+                self.last_dataset_context = dataset_context
+
+                print(f"  Domain: {dataset_context.get('domain', 'Unknown')}")
+                print(f"  Type: {dataset_context.get('dataset_type', 'Unknown')}")
+                if dataset_context.get('time_period'):
+                    print(f"  Period: {dataset_context.get('time_period')}")
+
+                # Generate context summary for downstream use
+                context_summary = f"{dataset_context.get('domain', 'Unknown')} - {dataset_context.get('dataset_type', dataset_context.get('description', 'Unknown'))}"
+                state["context_summary"] = context_summary
+
+            elif self.generate_context:
+                # No context from ETL - generate fresh (fallback)
+                print("\n[CONTEXT] ⚠ No ETL context - generating fresh context...")
                 dataset_context = self.context_generator.generate_context(
                     state["raw_data"],
                     state["dataset_name"]
@@ -218,7 +253,8 @@ class DiscoveryWorkflow:
             exploration_result = self.explorer.explore(
                 state["raw_data"],
                 state["dataset_name"],
-                dataset_context
+                dataset_context,
+                skip_visualizations=self.skip_visualizations
             )
 
             state["exploration_result"] = exploration_result

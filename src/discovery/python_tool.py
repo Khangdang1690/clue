@@ -153,7 +153,11 @@ class PythonExecutorTool(BaseTool):
         elif code.startswith('```'):
             code = code[len('```'):].strip()
 
-        if code.endswith('```'):
+        # Only remove trailing ``` if there's a newline before it (to avoid removing it from string literals)
+        if code.endswith('\n```'):
+            code = code[:-len('```')].strip()
+        elif code.endswith('```') and not code.endswith('"```') and not code.endswith("'```"):
+            # Only remove if it's not part of a string literal
             code = code[:-len('```')].strip()
 
         # Execute code
@@ -167,15 +171,30 @@ class PythonExecutorTool(BaseTool):
 
         # Write visualization data incrementally (if viz_data_store is provided)
         if result.success and result.result is not None and self.viz_data_store:
+            execution_number = len(self.execution_history)
+
             # Check if result is a dict with chart data
-            if isinstance(result.result, dict) and 'chart_type' in result.result:
-                execution_number = len(self.execution_history)
-                self.viz_data_store.add_visualization(
-                    execution_number=execution_number,
-                    chart_data=result.result,
-                    title=f"Execution {execution_number}",
-                    description=f"Visualization from code execution {execution_number}"
-                )
+            if isinstance(result.result, dict):
+                # Handle single chart (has 'chart_type' at root level)
+                if 'chart_type' in result.result:
+                    self.viz_data_store.add_visualization(
+                        execution_number=execution_number,
+                        chart_data=result.result,
+                        title=f"Execution {execution_number}",
+                        description=f"Visualization from code execution {execution_number}"
+                    )
+                # Handle multiple charts (chart_1, chart_2, etc.)
+                else:
+                    chart_count = 0
+                    for key, value in result.result.items():
+                        if isinstance(value, dict) and 'chart_type' in value:
+                            chart_count += 1
+                            self.viz_data_store.add_visualization(
+                                execution_number=execution_number * 100 + chart_count,  # Unique ID for each sub-chart
+                                chart_data=value,
+                                title=f"Execution {execution_number} - Chart {chart_count}",
+                                description=f"Visualization {chart_count} from code execution {execution_number}"
+                            )
 
         # Format output for LLM
         output_parts = []

@@ -274,12 +274,12 @@ class RelationshipDetector:
             join_strategy = 'left'
 
         return {
-            'match_percentage': match_pct,
+            'match_percentage': float(match_pct),  # Convert to Python float
             'relationship_type': rel_type,
             'join_strategy': join_strategy,
-            'from_unique_count': len(from_values),
-            'to_unique_count': len(to_values),
-            'intersection_count': len(intersection)
+            'from_unique_count': int(len(from_values)),  # Convert to Python int
+            'to_unique_count': int(len(to_values)),  # Convert to Python int
+            'intersection_count': int(len(intersection))  # Convert to Python int
         }
 
     def _calculate_final_confidence(self, match: Dict, stats: Dict) -> float:
@@ -317,7 +317,8 @@ class RelationshipDetector:
         if stats.get('relationship_type') in ['one-to-many', 'many-to-one']:
             confidence = min(1.0, confidence + 0.05)
 
-        return confidence
+        # Convert to Python float to avoid numpy type issues
+        return float(confidence)
 
     def _validate_semantically(
         self,
