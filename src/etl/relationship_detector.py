@@ -1,17 +1,16 @@
-"""Detects relationships between tables using statistical and semantic analysis with embeddings."""
+"""Detects relationships between tables using LLM interpretation and statistical analysis."""
 
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
 import numpy as np
 from difflib import SequenceMatcher
 from src.utils.llm_client import get_llm
-from src.utils.embedding_service import get_embedding_service
 from langchain_core.prompts import ChatPromptTemplate
 import json
 
 
 class RelationshipDetector:
-    """Detects foreign key relationships between tables using embeddings and statistics."""
+    """Detects foreign key relationships between tables using LLM interpretation and statistics."""
 
     def __init__(self, confidence_threshold: float = 0.8):
         """
@@ -19,49 +18,62 @@ class RelationshipDetector:
             confidence_threshold: Minimum confidence to accept a relationship
         """
         self.confidence_threshold = confidence_threshold
-        self.llm = get_llm(temperature=0.0, model="gemini-2.0-flash")
-        self.embedding_service = get_embedding_service()
+        self.llm = get_llm(temperature=0.0, model="gemini-2.5-flash")
 
     def detect_relationships(
         self,
         datasets: Dict[str, pd.DataFrame],
-        metadata: Dict[str, Dict]
+        metadata: Dict[str, Dict],
+        existing_datasets: Optional[Dict[str, pd.DataFrame]] = None,
+        existing_metadata: Optional[Dict[str, Dict]] = None
     ) -> List[Dict]:
         """
         Detect relationships between multiple datasets.
 
         Args:
-            datasets: {dataset_id: DataFrame}
-            metadata: {dataset_id: semantic_analysis_dict}
+            datasets: {dataset_id: DataFrame} - New datasets being processed
+            metadata: {dataset_id: semantic_analysis_dict} - New datasets metadata
+            existing_datasets: Optional {dataset_id: DataFrame} - Existing datasets in DB
+            existing_metadata: Optional {dataset_id: metadata} - Existing datasets metadata
 
         Returns:
             List of relationship dicts with confidence scores
         """
+        # Combine new and existing datasets for relationship detection
+        all_datasets = dict(datasets)
+        all_metadata = dict(metadata)
+
+        if existing_datasets:
+            all_datasets.update(existing_datasets)
+            all_metadata.update(existing_metadata or {})
+            print(f"\n[INFO] Including {len(existing_datasets)} existing datasets for relationship detection")
+
         relationships = []
-        dataset_ids = list(datasets.keys())
+        dataset_ids = list(all_datasets.keys())
 
         print("\n" + "="*80)
         print("[RELATIONSHIP DETECTION]")
+        print(f"Total datasets: {len(all_datasets)} ({len(datasets)} new + {len(existing_datasets or {})} existing)")
         print("="*80)
 
         # 1. Name-based matching (fuzzy)
-        name_matches = self._detect_by_column_names(datasets, metadata)
+        name_matches = self._detect_by_column_names(all_datasets, all_metadata)
         print(f"[STEP 1] Name matching: {len(name_matches)} potential relationships")
 
-        # 2. Embedding-based matching (semantic similarity)
-        embedding_matches = self._detect_by_embeddings(metadata)
-        print(f"[STEP 2] Embedding similarity: {len(embedding_matches)} semantic matches")
+        # 2. LLM interpretation (semantic reasoning)
+        llm_matches = self._detect_by_llm_interpretation(all_datasets, all_metadata, name_matches)
+        print(f"[STEP 2] LLM interpretation: {len(llm_matches)} semantic matches")
 
         # 3. Combine and deduplicate matches
-        all_matches = self._combine_matches(name_matches, embedding_matches)
+        all_matches = self._combine_matches(name_matches, llm_matches)
         print(f"[STEP 3] Combined: {len(all_matches)} unique candidates")
 
         # 4. Statistical validation
         validated_matches = []
         for match in all_matches:
             stats = self._validate_statistically(
-                datasets[match['from_dataset_id']],
-                datasets[match['to_dataset_id']],
+                all_datasets[match['from_dataset_id']],
+                all_datasets[match['to_dataset_id']],
                 match['from_column'],
                 match['to_column']
             )
@@ -78,7 +90,7 @@ class RelationshipDetector:
 
         # 5. LLM semantic validation (final check)
         if validated_matches:
-            final_relationships = self._validate_semantically(validated_matches, metadata)
+            final_relationships = self._validate_semantically(validated_matches, all_metadata)
         else:
             final_relationships = []
 
@@ -176,7 +188,124 @@ class RelationshipDetector:
 
         return matches
 
-    def _combine_matches(self, name_matches: List[Dict], embedding_matches: List[Dict]) -> List[Dict]:
+    def _detect_by_llm_interpretation(
+        self,
+        datasets: Dict[str, pd.DataFrame],
+        metadata: Dict[str, Dict],
+        name_matches: List[Dict]
+    ) -> List[Dict]:
+        """
+        Use LLM to interpret and score relationship likelihood.
+        Replaces embedding-based detection with direct LLM reasoning.
+
+        This is more aligned with LLM-driven decision making:
+        - LLM sees actual data samples
+        - Can understand business logic
+        - Provides explainable reasoning
+        - No embeddings needed
+        """
+        matches = []
+
+        # Only analyze name match candidates (avoid scoring all column pairs)
+        for candidate in name_matches:
+            from_dataset_id = candidate['from_dataset_id']
+            to_dataset_id = candidate['to_dataset_id']
+            from_col = candidate['from_column']
+            to_col = candidate['to_column']
+
+            # Get metadata
+            from_meta = metadata.get(from_dataset_id, {})
+            to_meta = metadata.get(to_dataset_id, {})
+            from_col_meta = from_meta.get('column_semantics', {}).get(from_col, {})
+            to_col_meta = to_meta.get('column_semantics', {}).get(to_col, {})
+
+            # Get sample data
+            from_df = datasets[from_dataset_id]
+            to_df = datasets[to_dataset_id]
+            from_samples = from_df[from_col].dropna().head(5).tolist()
+            to_samples = to_df[to_col].dropna().head(5).tolist()
+
+            # Ask LLM to score the relationship
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", """You are a database relationship expert. Analyze if two columns are likely a foreign key relationship.
+
+Score 0.0 to 1.0 based on:
+- Column name similarity
+- Data type compatibility
+- Sample value patterns
+- Business meaning alignment
+- Semantic types (key, dimension, measure)
+
+Return ONLY a JSON object: {{"score": 0.95, "reasoning": "brief explanation"}}"""),
+                ("user", """Analyze this potential relationship:
+
+Table 1: {from_table} (domain: {from_domain})
+  Column: {from_col}
+  Type: {from_type}
+  Semantic type: {from_semantic_type}
+  Business meaning: {from_meaning}
+  Sample values: {from_samples}
+
+Table 2: {to_table} (domain: {to_domain})
+  Column: {to_col}
+  Type: {to_type}
+  Semantic type: {to_semantic_type}
+  Business meaning: {to_meaning}
+  Sample values: {to_samples}
+
+Score this as a foreign key relationship:""")
+            ])
+
+            try:
+                chain = prompt | self.llm
+                result = chain.invoke({
+                    "from_table": from_meta.get('table_name', 'unknown'),
+                    "from_domain": from_meta.get('domain', 'Unknown'),
+                    "from_col": from_col,
+                    "from_type": str(from_df[from_col].dtype),
+                    "from_semantic_type": from_col_meta.get('semantic_type', 'unknown'),
+                    "from_meaning": from_col_meta.get('business_meaning', 'N/A'),
+                    "from_samples": str(from_samples[:3]),  # Show 3 samples
+                    "to_table": to_meta.get('table_name', 'unknown'),
+                    "to_domain": to_meta.get('domain', 'Unknown'),
+                    "to_col": to_col,
+                    "to_type": str(to_df[to_col].dtype),
+                    "to_semantic_type": to_col_meta.get('semantic_type', 'unknown'),
+                    "to_meaning": to_col_meta.get('business_meaning', 'N/A'),
+                    "to_samples": str(to_samples[:3])
+                })
+
+                # Parse LLM response
+                response_text = result.content.strip()
+                # Remove markdown code blocks if present
+                if '```' in response_text:
+                    response_text = response_text.split('```')[1]
+                    if response_text.startswith('json'):
+                        response_text = response_text[4:]
+
+                llm_result = json.loads(response_text)
+                score = float(llm_result.get('score', 0.0))
+                reasoning = llm_result.get('reasoning', '')
+
+                # Only add if LLM thinks it's likely a relationship (>0.7)
+                if score >= 0.7:
+                    matches.append({
+                        'from_dataset_id': from_dataset_id,
+                        'to_dataset_id': to_dataset_id,
+                        'from_column': from_col,
+                        'to_column': to_col,
+                        'llm_similarity': min(1.0, score),
+                        'llm_reasoning': reasoning
+                    })
+
+            except Exception as e:
+                # If LLM fails, skip this candidate
+                print(f"    [WARN] LLM interpretation failed for {from_col}->{to_col}: {e}")
+                continue
+
+        return matches
+
+    def _combine_matches(self, name_matches: List[Dict], llm_matches: List[Dict]) -> List[Dict]:
         """Combine and deduplicate matches from different detection methods."""
         combined = {}
 
@@ -190,8 +319,8 @@ class RelationshipDetector:
             )
             combined[key] = match
 
-        # Add or update with embedding matches
-        for match in embedding_matches:
+        # Add or update with LLM matches
+        for match in llm_matches:
             key = (
                 match['from_dataset_id'],
                 match['to_dataset_id'],
@@ -201,7 +330,8 @@ class RelationshipDetector:
 
             if key in combined:
                 # Merge scores
-                combined[key]['embedding_similarity'] = match.get('embedding_similarity', 0)
+                combined[key]['llm_similarity'] = match.get('llm_similarity', 0)
+                combined[key]['llm_reasoning'] = match.get('llm_reasoning', '')
             else:
                 combined[key] = match
 
@@ -299,9 +429,9 @@ class RelationshipDetector:
         if 'name_similarity' in match:
             confidence_components.append(match['name_similarity'] * 0.2)
 
-        # Embedding similarity (weight: 0.4 - most important)
-        if 'embedding_similarity' in match:
-            confidence_components.append(match['embedding_similarity'] * 0.4)
+        # LLM similarity (weight: 0.4 - most important, replaces embedding similarity)
+        if 'llm_similarity' in match:
+            confidence_components.append(match['llm_similarity'] * 0.4)
 
         # Statistical match percentage (weight: 0.4)
         if 'match_percentage' in stats:

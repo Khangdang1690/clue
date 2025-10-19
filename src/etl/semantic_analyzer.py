@@ -3,17 +3,16 @@
 from typing import Dict, List, Optional
 import pandas as pd
 from src.utils.llm_client import get_llm
-from src.utils.embedding_service import get_embedding_service
 from langchain_core.prompts import ChatPromptTemplate
 import json
 
 
 class SemanticAnalyzer:
-    """Analyzes datasets to understand domain, entities, and business meaning."""
+    """Analyzes datasets to understand domain, entities, and business meaning using LLM interpretation."""
 
     def __init__(self):
-        self.llm = get_llm(temperature=0.1, model="gemini-2.0-flash")
-        self.embedding_service = get_embedding_service()
+        self.llm = get_llm(temperature=0.1, model="gemini-2.5-flash")
+        # Embedding service removed - not needed for LLM-driven system
 
     def generate_table_name(self, df: pd.DataFrame, original_filename: str) -> str:
         """
@@ -195,24 +194,16 @@ Analyze this dataset and provide comprehensive unified context:""")
                 'column_semantics': {}
             }
 
-        # Add embeddings for semantic search
-        analysis['description_embedding'] = self.embedding_service.create_dataset_description_embedding(analysis)
+        # Embeddings disabled - not used by business discovery or relationship detection
+        # LLM interpretation is used instead for better accuracy and explainability
+        analysis['description_embedding'] = None
+        analysis['schema_embedding'] = None
 
-        # Schema embedding for structural similarity
-        analysis['schema_embedding'] = self.embedding_service.create_schema_embedding(
-            list(df.columns),
-            [str(df[col].dtype) for col in df.columns]
-        )
-
-        # Column embeddings for relationship detection
+        # Column embeddings also disabled
         for col_name in df.columns:
             if col_name in analysis['column_semantics']:
                 col_meta = analysis['column_semantics'][col_name]
-                col_meta['semantic_embedding'] = self.embedding_service.create_column_semantic_embedding(
-                    col_name,
-                    col_meta.get('business_meaning', ''),
-                    col_meta.get('semantic_type', '')
-                )
+                col_meta['semantic_embedding'] = None
 
         # Add statistics for each column
         for col_name in df.columns:

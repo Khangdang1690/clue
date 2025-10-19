@@ -157,6 +157,150 @@ class DatasetRepository:
         engine = DatabaseManager.get_engine()
         return pd.read_sql_table(table_name, engine)
 
+    @staticmethod
+    def find_dataset_by_filename(
+        session: Session,
+        company_id: str,
+        filename: str
+    ) -> Optional[Dataset]:
+        """
+        Check if dataset with this filename already exists for company.
+        Used for duplicate detection in CREATE mode.
+        """
+        return session.query(Dataset).filter(
+            Dataset.company_id == company_id,
+            Dataset.original_filename == filename
+        ).first()
+
+    @staticmethod
+    def load_existing_datasets_for_company(
+        session: Session,
+        company_id: str,
+        exclude_dataset_ids: List[str] = None
+    ) -> tuple[Dict[str, pd.DataFrame], Dict[str, Dict]]:
+        """
+        Load all existing datasets for a company as DataFrames and metadata.
+        Used for cross-ETL relationship detection.
+
+        Args:
+            session: Database session
+            company_id: Company ID
+            exclude_dataset_ids: Optional list of dataset IDs to exclude
+
+        Returns:
+            Tuple of (datasets_dict, metadata_dict)
+            - datasets_dict: {dataset_id: DataFrame}
+            - metadata_dict: {dataset_id: semantic_analysis_dict}
+        """
+        exclude_dataset_ids = exclude_dataset_ids or []
+
+        # Query existing datasets
+        query = session.query(Dataset).filter(Dataset.company_id == company_id)
+        if exclude_dataset_ids:
+            query = query.filter(~Dataset.id.in_(exclude_dataset_ids))
+
+        datasets = query.all()
+
+        datasets_dict = {}
+        metadata_dict = {}
+
+        for dataset in datasets:
+            try:
+                # Load DataFrame
+                df = DatasetRepository.load_dataframe(session, dataset.id)
+                datasets_dict[dataset.id] = df
+
+                # Build metadata dict (similar format to semantic_analyzer output)
+                metadata_dict[dataset.id] = {
+                    'table_name': dataset.table_name,
+                    'domain': dataset.domain,
+                    'description': dataset.description,
+                    'entities': dataset.entities or [],
+                    'dataset_type': dataset.dataset_type,
+                    'time_period': dataset.time_period,
+                    'typical_use_cases': dataset.typical_use_cases or [],
+                    'business_context': dataset.business_context or {}
+                }
+            except Exception as e:
+                print(f"  Warning: Could not load dataset {dataset.table_name}: {e}")
+                continue
+
+        return datasets_dict, metadata_dict
+
+    @staticmethod
+    def delete_dataset(session: Session, dataset_id: str) -> bool:
+        """
+        Delete dataset with full cascade:
+        - Table relationships (from/to)
+        - Analysis sessions containing this dataset
+        - Actual data table (cleaned_xxx)
+        - Dataset record (auto-cascades column metadata)
+
+        Args:
+            session: Database session
+            dataset_id: Dataset ID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        dataset = session.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if not dataset:
+            return False
+
+        print(f"[DELETE] Deleting dataset: {dataset.table_name} (ID: {dataset_id})")
+
+        # 1. Delete relationships (both from and to)
+        from_rels = session.query(TableRelationship).filter(
+            TableRelationship.from_dataset_id == dataset_id
+        ).all()
+        to_rels = session.query(TableRelationship).filter(
+            TableRelationship.to_dataset_id == dataset_id
+        ).all()
+
+        for rel in from_rels + to_rels:
+            session.delete(rel)
+        print(f"  Deleted {len(from_rels) + len(to_rels)} relationships")
+
+        # 2. Delete or update analysis sessions containing this dataset
+        sessions_with_dataset = session.query(AnalysisSession).all()
+        sessions_deleted = 0
+        sessions_updated = 0
+
+        for analysis_session in sessions_with_dataset:
+            if analysis_session.dataset_ids and dataset_id in analysis_session.dataset_ids:
+                # Remove dataset_id from the list
+                analysis_session.dataset_ids.remove(dataset_id)
+
+                # If no datasets left, delete the session
+                if not analysis_session.dataset_ids:
+                    session.delete(analysis_session)
+                    sessions_deleted += 1
+                else:
+                    sessions_updated += 1
+
+        if sessions_deleted > 0:
+            print(f"  Deleted {sessions_deleted} empty analysis sessions")
+        if sessions_updated > 0:
+            print(f"  Updated {sessions_updated} analysis sessions (removed dataset reference)")
+
+        # 3. Drop actual data table
+        try:
+            company = session.query(Company).filter(Company.id == dataset.company_id).first()
+            table_name = f"{company.name}_cleaned_{dataset.table_name}"
+            table_name = table_name.lower().replace(' ', '_').replace('-', '_')
+
+            session.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            print(f"  Dropped data table: {table_name}")
+        except Exception as e:
+            print(f"  Warning: Could not drop data table: {e}")
+
+        # 4. Delete dataset record (cascades to column metadata automatically)
+        session.delete(dataset)
+        print(f"  Deleted dataset record and column metadata")
+
+        session.flush()
+        return True
+
 
 class ColumnMetadataRepository:
     """Repository for column metadata operations."""
@@ -268,7 +412,13 @@ class SimilarityRepository:
         Useful for:
         - Finding related datasets for cross-analysis
         - Suggesting datasets to include in analysis
+
+        Note: Returns empty list if embedding is None (embeddings disabled).
         """
+        # Return empty if embeddings are disabled
+        if embedding is None:
+            return []
+
         # Convert numpy array to list if necessary
         import numpy as np
         if isinstance(embedding, np.ndarray):
@@ -282,7 +432,8 @@ class SimilarityRepository:
                 description,
                 1 - (description_embedding <=> CAST(:embedding AS vector)) as similarity
             FROM datasets
-            WHERE 1 - (description_embedding <=> CAST(:embedding AS vector)) > :threshold
+            WHERE description_embedding IS NOT NULL
+              AND 1 - (description_embedding <=> CAST(:embedding AS vector)) > :threshold
             ORDER BY description_embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
@@ -321,7 +472,13 @@ class SimilarityRepository:
         Useful for:
         - Relationship detection
         - Finding equivalent metrics across departments
+
+        Note: Returns empty list if embedding is None (embeddings disabled).
         """
+        # Return empty if embeddings are disabled
+        if embedding is None:
+            return []
+
         # Convert numpy array to list if necessary
         import numpy as np
         if isinstance(embedding, np.ndarray):
@@ -338,7 +495,8 @@ class SimilarityRepository:
                 1 - (cm.semantic_embedding <=> CAST(:embedding AS vector)) as similarity
             FROM column_metadata cm
             JOIN datasets d ON cm.dataset_id = d.id
-            WHERE 1 - (cm.semantic_embedding <=> CAST(:embedding AS vector)) > :threshold
+            WHERE cm.semantic_embedding IS NOT NULL
+              AND 1 - (cm.semantic_embedding <=> CAST(:embedding AS vector)) > :threshold
             """
         ]
 

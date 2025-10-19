@@ -10,6 +10,7 @@ class ETLState(TypedDict):
     # Input
     company_name: str
     file_paths: List[str]
+    mode: str  # 'create' = add new datasets (error on duplicate)
 
     # Step 1: Ingestion
     raw_dataframes: Dict[str, pd.DataFrame]  # {file_id: df}

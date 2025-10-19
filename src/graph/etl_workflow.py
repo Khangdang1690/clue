@@ -67,24 +67,27 @@ class ETLWorkflow:
 
         return workflow.compile()
 
-    def run_etl(self, file_paths: List[str]) -> Dict:
+    def run_etl(self, file_paths: List[str], mode: str = 'create') -> Dict:
         """
         Run ETL on multiple files.
 
         Args:
             file_paths: List of file paths to process
+            mode: Operation mode - 'create' = add new datasets (error on duplicate)
 
         Returns:
             ETL result with dataset IDs
         """
         print("\n" + "="*80)
         print(f"[ETL] STARTING ETL FOR COMPANY: {self.company_name}")
+        print(f"[ETL] MODE: {mode.upper()}")
         print("="*80)
         print(f"Files to process: {len(file_paths)}")
 
         initial_state: ETLState = {
             'company_name': self.company_name,
             'file_paths': file_paths,
+            'mode': mode,
             'raw_dataframes': {},
             'file_metadata': {},
             'semantic_metadata': {},
@@ -216,13 +219,39 @@ class ETLWorkflow:
         print("\n[STEP 3/6] DETECTING RELATIONSHIPS")
 
         try:
-            if len(state['raw_dataframes']) < 2:
-                print("  [INFO] Single dataset - no relationships to detect")
+            # CREATE mode: Load existing datasets for cross-ETL relationship detection
+            existing_datasets = None
+            existing_metadata = None
+
+            if state['mode'] == 'create':
+                print("  [CREATE MODE] Loading existing datasets for cross-ETL relationship detection...")
+                with DatabaseManager.get_session() as session:
+                    # Get or create company early to have company_id
+                    company = CompanyRepository.get_or_create_company(
+                        session,
+                        state['company_name']
+                    )
+                    state['company_id'] = str(company.id)
+                    print(f"  Company: {company.name} (ID: {company.id})")
+
+                    # Load existing datasets
+                    existing_datasets, existing_metadata = DatasetRepository.load_existing_datasets_for_company(
+                        session, company.id
+                    )
+
+                    if existing_datasets:
+                        print(f"  Loaded {len(existing_datasets)} existing datasets")
+
+            # Detect relationships
+            if len(state['raw_dataframes']) < 2 and not existing_datasets:
+                print("  [INFO] Single dataset and no existing datasets - no relationships to detect")
                 state['relationships'] = []
             else:
                 relationships = self.relationship_detector.detect_relationships(
                     state['raw_dataframes'],
-                    state['semantic_metadata']
+                    state['semantic_metadata'],
+                    existing_datasets=existing_datasets,
+                    existing_metadata=existing_metadata
                 )
 
                 state['relationships'] = relationships
@@ -230,8 +259,12 @@ class ETLWorkflow:
 
                 # Print detected relationships
                 for rel in relationships:
-                    from_table = state['semantic_metadata'][rel['from_dataset_id']].get('table_name', 'unknown')
-                    to_table = state['semantic_metadata'][rel['to_dataset_id']].get('table_name', 'unknown')
+                    # Check if dataset is in new or existing
+                    from_meta = state['semantic_metadata'].get(rel['from_dataset_id']) or (existing_metadata or {}).get(rel['from_dataset_id'], {})
+                    to_meta = state['semantic_metadata'].get(rel['to_dataset_id']) or (existing_metadata or {}).get(rel['to_dataset_id'], {})
+
+                    from_table = from_meta.get('table_name', 'unknown')
+                    to_table = to_meta.get('table_name', 'unknown')
                     print(f"  - {from_table}.{rel['from_column']} → {to_table}.{rel['to_column']} "
                           f"(confidence: {rel['confidence']:.2f})")
 
@@ -346,6 +379,26 @@ class ETLWorkflow:
 
                 # Store company_id in state for downstream use
                 state['company_id'] = str(company.id)
+
+                # CREATE mode: Check for duplicates
+                if state['mode'] == 'create':
+                    print("  [CREATE MODE] Checking for duplicate files...")
+                    for file_id, df in state['cleaned_dataframes'].items():
+                        file_meta = state['file_metadata'][file_id]
+                        filename = file_meta['file_name']
+
+                        existing = DatasetRepository.find_dataset_by_filename(
+                            session, company.id, filename
+                        )
+
+                        if existing:
+                            error_msg = f"Dataset '{filename}' already exists for company '{company.name}'"
+                            print(f"  [ERROR] {error_msg}")
+                            state['status'] = 'error'
+                            state['error_message'] = error_msg
+                            raise ValueError(error_msg)
+
+                    print("  [OK] No duplicates found")
 
                 # Store each dataset
                 print(f"  Files to store: {list(state['cleaned_dataframes'].keys())}")

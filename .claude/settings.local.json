@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(awk '{print $NF}')"
+      "Bash(awk '{print $NF}')",
+      "Bash(python -c \"\nfrom src.database.connection import DatabaseManager\nfrom src.database.repository import DatasetRepository\nfrom src.database.models import Company, Dataset\n\nDatabaseManager.initialize()\n\nwith DatabaseManager.get_session() as session:\n    companies = session.query(Company).all()\n    \n    print(''=== CURRENT DATABASE STATE ==='')\n    for company in companies:\n        print(f''\\nCompany: {company.name} (ID: {company.id})'')\n        datasets = DatasetRepository.get_datasets_by_company(session, company.id)\n        print(f''  Datasets: {len(datasets)}'')\n        for ds in datasets:\n            print(f''    - {ds.original_filename} -> {ds.table_name} (ID: {ds.id})'')\n\")"
     ],
     "deny": [],
     "ask": []

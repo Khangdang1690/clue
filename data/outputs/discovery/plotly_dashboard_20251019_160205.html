@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>business_discovery_unknown_company - Plotly Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* Modern B2B Dashboard Design - Professional & Clean */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f8f9fa;
+            color: #1a202c;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Header Section - Clean and Minimal */
+        header {
+            background: white;
+            padding: 32px 40px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        h1 {
+            color: #1a202c;
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 400;
+            margin-bottom: 24px;
+        }
+
+        /* Metadata Cards - Minimal and Professional */
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .metadata-item {
+            background: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 0;  /* Sharp edges */
+            border-left: 3px solid #3b82f6;
+        }
+
+        .metadata-label {
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .metadata-value {
+            color: #1a202c;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        /* Charts Section - Card Layout with Sharp Edges */
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        /* Chart Container - White card with sharp edges */
+        .chart-container {
+            background: white;
+            padding: 24px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0;  /* Sharp edges - no rounding */
+        }
+
+        .chart-header {
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .chart-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .chart-container h3 {
+            color: #1a202c;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .chart-type-selector,
+        .color-palette-selector {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0;  /* Sharp edges */
+            background: white;
+            color: #1a202c;
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .chart-type-selector:hover,
+        .color-palette-selector:hover {
+            border-color: #3b82f6;
+        }
+
+        .chart-type-selector:focus,
+        .color-palette-selector:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .color-palette-selector {
+            min-width: 120px;
+        }
+
+        .chart-description {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.5;
+            margin-top: 6px;
+        }
+
+        /* Plotly Chart - Sharp edges, no border inside card */
+        .plotly-chart {
+            min-height: 480px;
+            background: white;
+            border-radius: 0;  /* Sharp edges */
+            border: none;  /* No border since we're in a card */
+            padding: 0;
+        }
+
+        /* Footer - Subtle and Professional */
+        footer {
+            text-align: center;
+            color: #94a3b8;
+            margin-top: 64px;
+            padding: 24px;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Responsive Design */
+        @media (min-width: 1200px) {
+            .charts {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px 16px;
+            }
+
+            header {
+                padding: 24px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .metadata {
+                grid-template-columns: 1fr;
+            }
+
+            .charts {
+                gap: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>business_discovery_unknown_company</h1>
+            <div class="subtitle">Unknown | Data Analysis</div>
+
+            <div class="metadata">
+                <div class="metadata-item">
+                    <div class="metadata-label">Total Insights</div>
+                    <div class="metadata-value">3</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Generated</div>
+                    <div class="metadata-value">2025-10-19 15:57:19</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Visualizations</div>
+                    <div class="metadata-value">3</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="charts">
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Top Customer Segments by Total Revenue</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('1', this.value)" data-default="bar">
+                                <option value="bar" selected>Bar Chart</option>
+                                <option value="line" >Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('1', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: Which customer segments generate the most revenue and profit?</p>
+                </div>
+                <div id="chart_1" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Distribution of Customer Churn Risk</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('2', this.value)" data-default="bar">
+                                <option value="bar" selected>Bar Chart</option>
+                                <option value="line" >Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('2', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: What are the main reasons customers are at risk of leaving, and how can we reduce churn?</p>
+                </div>
+                <div id="chart_2" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Monthly Marketing Spend, Revenue, and New Customer Acquisition Trends</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('3', this.value)" data-default="line">
+                                <option value="bar" >Bar Chart</option>
+                                <option value="line" selected>Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('3', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: How effective is our marketing spending in attracting new customers and driving sales?</p>
+                </div>
+                <div id="chart_3" class="plotly-chart"></div>
+            </div>
+            
+        </div>
+
+        <footer>
+            <p>Generated with Autonomous AI Analyst | Plotly Dashboard</p>
+        </footer>
+    </div>
+
+    <script>
+        // Function to change chart type dynamically
+        function changeChartType(chartId, newType) {
+            const chartDiv = 'chart_' + chartId;
+            let update = {};
+
+            // Configure update based on chart type
+            if (newType === 'bar') {
+                update.type = 'bar';
+                update.mode = null;
+                update.fill = null;
+            } else if (newType === 'line') {
+                update.type = 'scatter';
+                update.mode = 'lines+markers';
+                update.fill = null;
+                update.line = {
+                    width: 3,
+                    shape: 'spline'
+                };
+            } else if (newType === 'scatter') {
+                update.type = 'scatter';
+                update.mode = 'markers';
+                update.fill = null;
+            } else if (newType === 'area') {
+                update.type = 'scatter';
+                update.mode = 'lines';
+                update.fill = 'tozeroy';
+                update.line = {
+                    width: 2,
+                    shape: 'spline'
+                };
+            }
+
+            // Apply the update to all traces in the chart
+            Plotly.restyle(chartDiv, update);
+        }
+
+        // Function to change chart color dynamically
+        function changeChartColor(chartId, newColor) {
+            if (!newColor) return; // Skip if "Select Color" is chosen
+
+            const chartDiv = 'chart_' + chartId;
+            const chartElement = document.getElementById(chartDiv);
+
+            // Get number of traces in the chart
+            const numTraces = chartElement.data.length;
+
+            // Update color for all traces
+            let update = {};
+
+            // For markers (all chart types)
+            update['marker.color'] = newColor;
+
+            // For line charts - update line color
+            update['line.color'] = newColor;
+
+            // Apply to all traces
+            const traceIndices = Array.from({length: numTraces}, (_, i) => i);
+            Plotly.restyle(chartDiv, update, traceIndices);
+
+            // Reset the dropdown to "Select Color"
+            event.target.value = '';
+        }
+
+        // Initialize Plotly charts
+        
+        Plotly.newPlot('chart_1', [{"x": ["Tech - Small - South", "Tech - Small - West", "Tech - Medium - East", "Healthcare - Small - South", "Tech - Medium - North", "Healthcare - Medium - West", "Finance - Small - North", "Healthcare - Small - North", "Tech - Medium - South", "Finance - Medium - North"], "y": [147443.2775, 143629.366, 135981.2825, 132940.85150000002, 130830.3125, 113384.561, 110684.791, 106799.4105, 95396.1415, 94052.805], "type": "bar", "marker": {"color": "#764ba2", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_1", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_2', [{"x": ["Low", "Medium", "High"], "y": [144, 49, 307], "type": "bar", "marker": {"color": "#4facfe", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_2", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_3', [{"x": ["2021-01", "2021-02", "2021-03", "2021-04", "2021-05", "2021-06", "2021-07", "2021-08", "2021-09", "2021-10", "2021-11", "2021-12", "2022-01", "2022-02", "2022-03", "2022-04", "2022-05", "2022-06", "2022-07", "2022-08", "2022-09", "2022-10", "2022-11", "2022-12", "2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06", "2023-07", "2023-08", "2023-09", "2023-10", "2023-11", "2023-12"], "y": {"marketing_spend": [164895.97, 170270.04, 205926.09, 201625.21, 198633.26, 180711.38999999998, 162465.73, 141989.09, 126996.76, 135966.88, 147908.79, 171589.49, 201614.85, 202764.86000000002, 233159.97, 231034.35, 229058.42, 200650.62, 191495.7, 175316.31, 160867.53, 163429.88, 174836.01, 201333.95, 228715.04, 233179.5, 267916.62, 263763.29, 264796.44, 242829.99, 222394.51, 207318.67, 185937.16, 201846.04, 206103.12, 236201.85], "revenue": [1248578.83, 1303734.9, 1550731.1400000001, 1536305.843752549, 1543020.9066795409, 1369962.89, 1333355.09, 1277815.21, 1213381.4120803229, 1413837.9582097146, 1326857.75, 1448338.35, 1511719.79, 1484680.7024845667, 1600447.95, 1570875.8973726837, 1579146.66, 1502296.6, 1527301.13, 1489541.68, 1421598.29, 1467615.6879388744, 1379792.83, 1538199.0924863436, 1620823.2308548708, 1514637.83, 1748449.93, 1948606.052990928, 1813314.45, 1732048.62, 1670372.8699999999, 1559554.95, 1434294.46, 1507142.63, 1483903.89, 1640704.24], "new_customers": [11, 10, 10, 11, 11, 10, 11, 11, 10, 11, 11, 10, 11, 10, 11, 10, 11, 11, 10, 11, 11, 11, 10, 11, 11, 9, 11, 11, 11, 10, 11, 11, 10, 11, 10, 1]}, "type": "scatter", "mode": "lines+markers", "marker": {"color": "#43e97b", "size": 8, "line": {"color": "white", "width": 2}}, "line": {"color": "#43e97b", "width": 3, "shape": "spline"}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_3", "height": 800, "width": 1200, "scale": 2}});
+        
+    </script>
+</body>
+</html>

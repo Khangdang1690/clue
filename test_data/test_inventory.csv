@@ -1,0 +1,6 @@
+inventory_id,product_id,quantity,warehouse
+1,P001,100,WH-A
+2,P002,150,WH-B
+3,P003,200,WH-A
+4,P004,75,WH-C
+5,P005,120,WH-B
