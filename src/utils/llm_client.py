@@ -99,6 +99,5 @@ def get_llm(
         max_retries=max_retries,
         timeout=timeout,
         google_api_key=api_key,
-        # Additional recommended settings
-        convert_system_message_to_human=True,  # Better compatibility
+        # Gemini 2.5 supports system messages natively - no conversion needed
     )

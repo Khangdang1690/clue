@@ -21,7 +21,7 @@ class BusinessAnalystLLM:
         # Configure Gemini
         api_key = os.getenv('GEMINI_API_KEY')
         if api_key:
-            genai.configure(api_key=api_key)
+            genai.configure(api_key=api_key, transport='rest')  # Use REST to avoid gRPC ALTS warnings
             # Use the correct model name
             self.model = genai.GenerativeModel('gemini-2.5-flash')
         else:

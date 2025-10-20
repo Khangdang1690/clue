@@ -24,7 +24,6 @@ from src.database.repository import (
 )
 from src.database.models import Dataset, Company
 from src.graph.etl_workflow import ETLWorkflow
-from src.graph.multi_table_discovery import MultiTableDiscovery
 
 
 class UploadResult:
@@ -60,12 +59,98 @@ class DatasetManager:
     """
 
     def __init__(self):
-        self.discovery = MultiTableDiscovery()
+        pass
 
 
     # ========================================================================
     # PUBLIC API
     # ========================================================================
+
+    def quick_duplicate_check(
+        self,
+        company_id: int,
+        file_path: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Lightweight duplicate detection - NO full ETL, just schema comparison.
+
+        This is much faster than process_upload() because it only:
+        - Reads file headers + first 100 rows (sample)
+        - Compares schemas with existing datasets
+        - Estimates overlap if schema matches
+
+        Args:
+            company_id: Company ID
+            file_path: Path to file to check
+
+        Returns:
+            Dict with duplicate info if found, None otherwise
+            {
+                "dataset_id": str,
+                "dataset_name": str,
+                "overlap_percentage": float,
+                "new_rows": int
+            }
+        """
+        try:
+            # Read just a sample (fast)
+            file_ext = os.path.splitext(file_path)[1].lower()
+            if file_ext == '.csv':
+                new_df = pd.read_csv(file_path, nrows=100)
+            else:  # Excel
+                new_df = pd.read_excel(file_path, nrows=100)
+
+            new_filename = os.path.basename(file_path)
+
+        except Exception as e:
+            print(f"[WARN] Could not quick-check {file_path}: {e}")
+            return None
+
+        # Get existing datasets for this company
+        with DatabaseManager.get_session() as session:
+            existing_datasets = DatasetRepository.get_datasets_by_company(
+                session,
+                company_id
+            )
+
+            if not existing_datasets:
+                return None
+
+            # Check each existing dataset for schema match
+            for existing_ds in existing_datasets:
+                try:
+                    # Load sample from existing dataset
+                    existing_df = DatasetRepository.load_dataframe(session, existing_ds.id)
+                    if existing_df is None or len(existing_df) == 0:
+                        continue
+
+                    # Check if schemas match
+                    if not self._schemas_match(new_df, existing_df):
+                        continue
+
+                    # Schema matches! Calculate overlap
+                    overlap_pct = self._calculate_overlap(new_df, existing_df)
+
+                    # Only report if significant overlap (>90% = duplicate)
+                    if overlap_pct > 0.9:
+                        # Get full row count from new file for metadata
+                        if file_ext == '.csv':
+                            full_df = pd.read_csv(file_path)
+                        else:
+                            full_df = pd.read_excel(file_path)
+
+                        return {
+                            "dataset_id": existing_ds.id,
+                            "dataset_name": existing_ds.table_name,
+                            "overlap_percentage": overlap_pct,
+                            "new_rows": len(full_df)
+                        }
+
+                except Exception as e:
+                    print(f"[WARN] Error checking {existing_ds.table_name}: {e}")
+                    continue
+
+        return None  # No duplicate found
 
     def process_upload(
         self,
@@ -191,13 +276,15 @@ class DatasetManager:
             if cascade:
                 self._cascade_delete_dependencies(session, dependencies)
 
+            # Save table name before deleting (object will be detached after delete)
+            table_name = dataset.table_name
+
             # Delete the dataset record
             session.delete(dataset)
-
-            # Drop the actual database table
-            self._drop_table(dataset.table_name)
-
             session.commit()
+
+            # Drop the actual database table (after committing session)
+            self._drop_table(table_name)
 
             print(f"\n[SUCCESS] Dataset deleted")
 
@@ -223,14 +310,9 @@ class DatasetManager:
         print(f"\n[CASE 1] COMPLETELY NEW DATASET")
         print(f"{'='*80}")
 
-        # Get company name
-        with DatabaseManager.get_session() as session:
-            company = session.query(Company).filter_by(id=company_id).first()
-            company_name = company.name if company else "Unknown Company"
-
         # Run full ETL pipeline
         print(f"\n[ETL] Running full pipeline...")
-        etl_workflow = ETLWorkflow(company_name=company_name)
+        etl_workflow = ETLWorkflow(company_id=str(company_id))
         etl_result = etl_workflow.run_etl(file_paths=[file_path])
 
         if etl_result.get('status') != 'completed':
@@ -243,8 +325,9 @@ class DatasetManager:
         with DatabaseManager.get_session() as session:
             datasets = DatasetRepository.get_datasets_by_company(session, company_id)
             # Assume the newest dataset is the one we just created
-            new_dataset = max(datasets, key=lambda d: d.created_at)
+            new_dataset = max(datasets, key=lambda d: d.uploaded_at)
             new_dataset_id = new_dataset.id
+            new_dataset_name = new_dataset.table_name
 
         # Get all existing datasets (excluding this new one)
         with DatabaseManager.get_session() as session:
@@ -253,35 +336,18 @@ class DatasetManager:
                 ds.id for ds in all_datasets if ds.id != new_dataset_id
             ]
 
-            new_dataset = DatasetRepository.get_dataset_by_id(session, new_dataset_id)
-
         # If there are existing datasets, check for cross-dataset relationships
         if existing_dataset_ids:
             print(f"\n[RELATIONSHIPS] Checking relationships with {len(existing_dataset_ids)} existing datasets...")
             # This is already done in ETL pipeline's relationship detection
             # But we could add incremental relationship detection here if needed
 
-        # Run cross-table discovery on all datasets
-        print(f"\n[DISCOVERY] Running cross-table analysis...")
-        try:
-            with DatabaseManager.get_session() as session:
-                all_datasets = DatasetRepository.get_datasets_by_company(session, company_id)
-                all_dataset_ids = [ds.id for ds in all_datasets]
-
-            if len(all_dataset_ids) > 1:
-                self.discovery.run_discovery(
-                    company_id=str(company_id),
-                    dataset_ids=all_dataset_ids
-                )
-        except Exception as e:
-            print(f"[WARN] Discovery failed: {e}")
-
-        print(f"\n[SUCCESS] New dataset created: {new_dataset.table_name}")
+        print(f"\n[SUCCESS] New dataset created: {new_dataset_name}")
 
         return UploadResult(
             status="created",
             dataset_id=new_dataset_id,
-            dataset_name=new_dataset.table_name,
+            dataset_name=new_dataset_name,
             message=f"Created new dataset with {len(df)} rows",
             metadata={
                 "row_count": len(df),
@@ -346,23 +412,6 @@ class DatasetManager:
             session.commit()
 
             print(f"[SUCCESS] Dataset updated")
-
-        # Re-run analytics on updated dataset
-        print(f"\n[REPROCESSING] Re-running advanced analytics...")
-        try:
-            # Re-run discovery on all datasets (incremental would be better, but for now full refresh)
-            with DatabaseManager.get_session() as session:
-                all_datasets = DatasetRepository.get_datasets_by_company(session, company_id)
-                all_dataset_ids = [ds.id for ds in all_datasets]
-
-            if len(all_dataset_ids) > 1:
-                self.discovery.run_discovery(
-                    company_id=str(company_id),
-                    dataset_ids=all_dataset_ids,
-                    analysis_name=f"Update: {dataset_name}"
-                )
-        except Exception as e:
-            print(f"[WARN] Reprocessing failed: {e}")
 
         return UploadResult(
             status="appended",
@@ -441,22 +490,6 @@ class DatasetManager:
             session.commit()
 
             print(f"[SUCCESS] Data replaced")
-
-        # Re-run analytics
-        print(f"\n[REPROCESSING] Re-running analytics...")
-        try:
-            with DatabaseManager.get_session() as session:
-                all_datasets = DatasetRepository.get_datasets_by_company(session, company_id)
-                all_dataset_ids = [ds.id for ds in all_datasets]
-
-            if len(all_dataset_ids) > 1:
-                self.discovery.run_discovery(
-                    company_id=str(company_id),
-                    dataset_ids=all_dataset_ids,
-                    analysis_name=f"Replace: {table_name}"
-                )
-        except Exception as e:
-            print(f"[WARN] Reprocessing failed: {e}")
 
         return UploadResult(
             status="replaced",
@@ -660,8 +693,8 @@ class DatasetManager:
 
         # Find relationships that reference this dataset
         relationships = session.query(TableRelationship).filter(
-            (TableRelationship.source_dataset_id == dataset_id) |
-            (TableRelationship.target_dataset_id == dataset_id)
+            (TableRelationship.from_dataset_id == dataset_id) |
+            (TableRelationship.to_dataset_id == dataset_id)
         ).all()
         dependencies["relationships"] = [r.id for r in relationships]
 
@@ -703,9 +736,10 @@ class DatasetManager:
         from sqlalchemy import text
 
         try:
-            with DatabaseManager.engine.connect() as conn:
+            engine = DatabaseManager.get_engine()
+            with engine.begin() as conn:
                 conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
-                conn.commit()
             print(f"[DATABASE] Dropped table {table_name}")
         except Exception as e:
-            print(f"[WARN] Could not drop table {table_name}: {e}")
+            print(f"[ERROR] Could not drop table {table_name}: {e}")
+            # Don't raise - dataset record is already deleted, table cleanup is best effort

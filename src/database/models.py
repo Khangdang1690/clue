@@ -13,15 +13,42 @@ Base = declarative_base()
 EMBEDDING_DIM = 3072
 
 
+class User(Base):
+    """User entity from Clerk authentication"""
+    __tablename__ = 'users'
+
+    id = Column(String, primary_key=True)  # Clerk user ID
+    email = Column(String, nullable=False, unique=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    profile_image_url = Column(String)
+
+    # Company relationship (1 user belongs to 1 company)
+    company_id = Column(String, ForeignKey('companies.id'), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_sign_in_at = Column(DateTime)
+
+    # Clerk metadata (avoiding SQLAlchemy reserved 'metadata' name)
+    clerk_metadata = Column(JSON)  # Store additional Clerk metadata
+
+    # Relationships
+    company = relationship("Company", back_populates="users")
+
+
 class Company(Base):
     """Company/Organization entity"""
     __tablename__ = 'companies'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, unique=True)
+    industry = Column(String)  # E-commerce, SaaS, Healthcare, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
+    # Relationships (1 company has many users)
+    users = relationship("User", back_populates="company")
     datasets = relationship("Dataset", back_populates="company", cascade="all, delete-orphan")
     analysis_sessions = relationship("AnalysisSession", back_populates="company", cascade="all, delete-orphan")
 

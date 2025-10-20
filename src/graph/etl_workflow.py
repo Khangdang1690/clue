@@ -1,8 +1,9 @@
 """LangGraph workflow for multi-dataset ETL with embeddings."""
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, AsyncGenerator
 from pathlib import Path
 from langgraph.graph import StateGraph, END
+from langgraph.config import get_stream_writer
 import pandas as pd
 from src.models.etl_models import ETLState
 from src.etl.data_ingestion import DataIngestion
@@ -30,12 +31,12 @@ class ETLWorkflow:
     6. Store → Save to PostgreSQL with embeddings
     """
 
-    def __init__(self, company_name: str):
+    def __init__(self, company_id: str):
         """
         Args:
-            company_name: Company identifier for this ETL run
+            company_id: Company UUID for this ETL run
         """
-        self.company_name = company_name
+        self.company_id = company_id
         self.semantic_analyzer = SemanticAnalyzer()
         self.relationship_detector = RelationshipDetector(confidence_threshold=0.8)
         self.adaptive_cleaner = AdaptiveCleaner()
@@ -79,13 +80,13 @@ class ETLWorkflow:
             ETL result with dataset IDs
         """
         print("\n" + "="*80)
-        print(f"[ETL] STARTING ETL FOR COMPANY: {self.company_name}")
+        print(f"[ETL] STARTING ETL FOR COMPANY ID: {self.company_id}")
         print(f"[ETL] MODE: {mode.upper()}")
         print("="*80)
         print(f"Files to process: {len(file_paths)}")
 
         initial_state: ETLState = {
-            'company_name': self.company_name,
+            'company_name': '',  # Deprecated, kept for compatibility
             'file_paths': file_paths,
             'mode': mode,
             'raw_dataframes': {},
@@ -97,7 +98,7 @@ class ETLWorkflow:
             'kpi_definitions': {},
             'calculated_kpis': {},
             'dataset_ids': {},
-            'company_id': '',  # Will be set after company is created
+            'company_id': self.company_id,
             'status': 'pending',
             'error_message': '',
             'current_step': 'initialization'
@@ -127,12 +128,82 @@ class ETLWorkflow:
             print(f"\n[ERROR] ETL failed: {e}")
             raise
 
+    async def astream_etl(self, file_paths: List[str], mode: str = 'create') -> AsyncGenerator[Dict, None]:
+        """
+        Run ETL on multiple files with progress streaming.
+
+        Streams custom progress events that can be consumed by the service layer
+        to provide real-time updates to the frontend via SSE.
+
+        Args:
+            file_paths: List of file paths to process
+            mode: Operation mode - 'create' = add new datasets
+
+        Yields:
+            Custom progress events with step, progress, and message
+        """
+        print("\n" + "="*80)
+        print(f"[ETL] STARTING ETL STREAM FOR COMPANY ID: {self.company_id}")
+        print(f"[ETL] MODE: {mode.upper()}")
+        print("="*80)
+        print(f"Files to process: {len(file_paths)}")
+
+        initial_state: ETLState = {
+            'company_name': '',
+            'file_paths': file_paths,
+            'mode': mode,
+            'raw_dataframes': {},
+            'file_metadata': {},
+            'semantic_metadata': {},
+            'relationships': [],
+            'cleaned_dataframes': {},
+            'cleaning_reports': {},
+            'kpi_definitions': {},
+            'calculated_kpis': {},
+            'dataset_ids': {},
+            'company_id': self.company_id,
+            'status': 'pending',
+            'error_message': '',
+            'current_step': 'initialization'
+        }
+
+        try:
+            # Stream using custom mode to capture progress events from nodes
+            async for event in self.graph.astream(initial_state, stream_mode="custom"):
+                # event is a tuple: (node_name, custom_data)
+                if isinstance(event, tuple) and len(event) == 2:
+                    node_name, data = event
+                    # Yield the custom data (progress event)
+                    yield data
+
+            print("\n" + "="*80)
+            print("[SUCCESS] ETL STREAM COMPLETED")
+            print("="*80)
+
+        except Exception as e:
+            print(f"\n[ERROR] ETL stream failed: {e}")
+            # Yield error event
+            yield {
+                "step": "error",
+                "progress": 0,
+                "message": f"ETL failed: {str(e)}",
+                "error": str(e)
+            }
+            raise
+
     # Node implementations
 
     def _ingest_node(self, state: ETLState) -> ETLState:
         """Node 1: Load all files."""
         state['current_step'] = 'ingestion'
         print("\n[STEP 1/6] INGESTING FILES")
+
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "ingestion", "progress": 15, "message": f"Loading {len(state['file_paths'])} file(s)..."})
+        except:
+            pass  # Writer only works in streaming mode
 
         try:
             for i, file_path in enumerate(state['file_paths']):
@@ -152,6 +223,13 @@ class ETLWorkflow:
             print(f"[OK] Loaded {len(state['raw_dataframes'])} datasets")
             print(f"  File IDs: {list(state['raw_dataframes'].keys())}")
 
+            # Emit completion event
+            try:
+                writer = get_stream_writer()
+                writer({"step": "ingestion_complete", "progress": 28, "message": f"Loaded {len(state['raw_dataframes'])} dataset(s)"})
+            except:
+                pass
+
         except Exception as e:
             state['status'] = 'error'
             state['error_message'] = f"Ingestion failed: {e}"
@@ -162,6 +240,13 @@ class ETLWorkflow:
         """Node 2: Analyze semantic meaning of each dataset with embeddings."""
         state['current_step'] = 'semantic_analysis'
         print("\n[STEP 2/6] SEMANTIC ANALYSIS")
+
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "semantic_analysis", "progress": 28, "message": "Analyzing dataset semantics..."})
+        except:
+            pass
 
         try:
             for file_id, df in state['raw_dataframes'].items():
@@ -211,12 +296,26 @@ class ETLWorkflow:
 
             print(f"[WARN] Using fallback metadata for {len(state['raw_dataframes'])} datasets")
 
+        # Emit completion event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "semantic_analysis_complete", "progress": 41, "message": f"Analyzed {len(state['semantic_metadata'])} dataset(s)"})
+        except:
+            pass
+
         return state
 
     def _detect_relationships_node(self, state: ETLState) -> ETLState:
         """Node 3: Detect relationships between datasets using embeddings."""
         state['current_step'] = 'relationship_detection'
         print("\n[STEP 3/6] DETECTING RELATIONSHIPS")
+
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "relationship_detection", "progress": 41, "message": "Detecting relationships between datasets..."})
+        except:
+            pass
 
         try:
             # CREATE mode: Load existing datasets for cross-ETL relationship detection
@@ -226,17 +325,13 @@ class ETLWorkflow:
             if state['mode'] == 'create':
                 print("  [CREATE MODE] Loading existing datasets for cross-ETL relationship detection...")
                 with DatabaseManager.get_session() as session:
-                    # Get or create company early to have company_id
-                    company = CompanyRepository.get_or_create_company(
-                        session,
-                        state['company_name']
-                    )
-                    state['company_id'] = str(company.id)
-                    print(f"  Company: {company.name} (ID: {company.id})")
+                    # Use company_id from state (already set in __init__)
+                    company_id = state['company_id']
+                    print(f"  Company ID: {company_id}")
 
                     # Load existing datasets
                     existing_datasets, existing_metadata = DatasetRepository.load_existing_datasets_for_company(
-                        session, company.id
+                        session, company_id
                     )
 
                     if existing_datasets:
@@ -274,12 +369,26 @@ class ETLWorkflow:
             print(f"[WARN] Relationship detection failed: {e}")
             state['relationships'] = []
 
+        # Emit completion event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "relationship_detection_complete", "progress": 54, "message": f"Found {len(state['relationships'])} relationship(s)"})
+        except:
+            pass
+
         return state
 
     def _clean_data_node(self, state: ETLState) -> ETLState:
         """Node 4: Clean all datasets with FK awareness."""
         state['current_step'] = 'cleaning'
         print("\n[STEP 4/6] CLEANING DATA")
+
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "cleaning", "progress": 54, "message": "Cleaning data..."})
+        except:
+            pass
 
         try:
             for file_id, df in state['raw_dataframes'].items():
@@ -326,12 +435,26 @@ class ETLWorkflow:
             import traceback
             traceback.print_exc()
 
+        # Emit completion event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "cleaning_complete", "progress": 67, "message": f"Cleaned {len(state['cleaned_dataframes'])} dataset(s)"})
+        except:
+            pass
+
         return state
 
     def _calculate_kpis_node(self, state: ETLState) -> ETLState:
         """Node 5: Calculate KPIs for each dataset."""
         state['current_step'] = 'kpi_calculation'
         print("\n[STEP 5/6] CALCULATING KPIs")
+
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "kpi_calculation", "progress": 67, "message": "Calculating KPIs..."})
+        except:
+            pass
 
         try:
             for file_id, df in state['cleaned_dataframes'].items():
@@ -360,6 +483,13 @@ class ETLWorkflow:
         except Exception as e:
             print(f"[WARN] KPI calculation failed: {e}")
 
+        # Emit completion event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "kpi_calculation_complete", "progress": 80, "message": "KPI calculation complete"})
+        except:
+            pass
+
         return state
 
     def _store_to_db_node(self, state: ETLState) -> ETLState:
@@ -368,17 +498,18 @@ class ETLWorkflow:
         print("\n[STEP 6/6] STORING TO DATABASE")
         print(f"  Relationships in state: {len(state.get('relationships', []))}")
 
+        # Emit progress event
+        try:
+            writer = get_stream_writer()
+            writer({"step": "storage", "progress": 80, "message": "Storing to database..."})
+        except:
+            pass
+
         try:
             with DatabaseManager.get_session() as session:
-                # Get or create company
-                company = CompanyRepository.get_or_create_company(
-                    session,
-                    state['company_name']
-                )
-                print(f"  Company: {company.name} (ID: {company.id})")
-
-                # Store company_id in state for downstream use
-                state['company_id'] = str(company.id)
+                # Use company_id from state (already set in __init__)
+                company_id = state['company_id']
+                print(f"  Company ID: {company_id}")
 
                 # CREATE mode: Check for duplicates
                 if state['mode'] == 'create':
@@ -388,11 +519,11 @@ class ETLWorkflow:
                         filename = file_meta['file_name']
 
                         existing = DatasetRepository.find_dataset_by_filename(
-                            session, company.id, filename
+                            session, company_id, filename
                         )
 
                         if existing:
-                            error_msg = f"Dataset '{filename}' already exists for company '{company.name}'"
+                            error_msg = f"Dataset '{filename}' already exists for this company"
                             print(f"  [ERROR] {error_msg}")
                             state['status'] = 'error'
                             state['error_message'] = error_msg
@@ -411,7 +542,7 @@ class ETLWorkflow:
                     # Create dataset record with embeddings and unified context
                     dataset = DatasetRepository.create_dataset(
                         session=session,
-                        company_id=company.id,
+                        company_id=company_id,
                         original_filename=file_meta['file_name'],
                         table_name=semantic_meta['table_name'],
                         file_type=file_meta['file_type'],
@@ -517,6 +648,19 @@ class ETLWorkflow:
 
             state['status'] = 'completed'
             print("[OK] All data stored successfully")
+
+            # Emit final completion event with dataset IDs for service layer
+            try:
+                writer = get_stream_writer()
+                writer({
+                    "step": "completed",
+                    "progress": 95,
+                    "message": "ETL completed successfully",
+                    "dataset_ids": state.get('dataset_ids', {}),
+                    "semantic_metadata": state.get('semantic_metadata', {})
+                })
+            except:
+                pass
 
         except Exception as e:
             state['status'] = 'error'
