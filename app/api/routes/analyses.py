@@ -1,15 +1,18 @@
 """Analysis routes for managing and retrieving analysis results."""
 
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse, PlainTextResponse, HTMLResponse
+from fastapi.responses import FileResponse, PlainTextResponse, HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 import os
 from pathlib import Path
 import markdown
 import tempfile
+import asyncio
+import json
 
 from app.api.deps import get_db
+from app.services.analysis_progress_service import AnalysisProgressService
 from src.database.repository import AnalysisSessionRepository
 from src.database.models import User
 
@@ -114,6 +117,73 @@ async def get_analysis(
         )
 
 
+@router.get("/analyses/{analysis_id}/stream")
+async def stream_analysis_progress(analysis_id: str):
+    """
+    Stream real-time progress updates for an analysis using Server-Sent Events (SSE).
+
+    This endpoint provides real-time updates as the workflow progresses through its 8 steps.
+    Events are sent in the format:
+    - event: progress | complete | error
+    - data: JSON object with progress details
+    """
+
+    async def event_generator():
+        """Generate SSE events for the analysis progress."""
+        try:
+            # Register this client with the progress service
+            print(f"[SSE] Registering client for analysis {analysis_id}")
+            queue = await AnalysisProgressService.register_client(analysis_id)
+            print(f"[SSE] Client registered, queue received")
+
+            try:
+                while True:
+                    # Wait for progress updates (with timeout to send keepalive)
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                        print(f"[SSE] Received event: {event.get('event')}")
+
+                        # Format as SSE event
+                        event_type = event.get('event', 'progress')
+                        event_data = event.get('data', {})
+
+                        # Send the event
+                        yield f"event: {event_type}\n"
+                        yield f"data: {json.dumps(event_data)}\n\n"
+
+                        # If analysis completed or failed, close the stream
+                        if event_type in ('complete', 'error'):
+                            print(f"[SSE] Analysis {event_type}, closing stream")
+                            break
+
+                    except asyncio.TimeoutError:
+                        # Send keepalive comment to prevent connection timeout
+                        yield ": keepalive\n\n"
+
+            except asyncio.CancelledError:
+                # Client disconnected
+                print(f"[SSE] Client disconnected for analysis {analysis_id}")
+            finally:
+                # Unregister this client
+                await AnalysisProgressService.unregister_client(analysis_id, queue)
+                print(f"[SSE] Client unregistered")
+        except Exception as e:
+            print(f"[SSE ERROR] Exception in event generator: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+
 @router.get("/analyses/{analysis_id}/dashboard", response_class=HTMLResponse)
 async def get_dashboard(
     analysis_id: str,
@@ -123,21 +193,30 @@ async def get_dashboard(
     Serve the interactive dashboard HTML for an analysis.
     """
     try:
+        print(f"[API] Dashboard request for analysis: {analysis_id}")
         analysis = AnalysisSessionRepository.get_by_id(
             session=db,
             analysis_id=analysis_id
         )
 
         if not analysis:
+            print(f"[API] Analysis not found in database")
             raise HTTPException(status_code=404, detail="Analysis not found")
 
+        print(f"[API] Analysis found. Status: {analysis.status}")
+        print(f"[API] Dashboard path in DB: {analysis.dashboard_path}")
+
         if not analysis.dashboard_path:
+            print(f"[API] Dashboard path is None or empty")
             raise HTTPException(status_code=404, detail="Dashboard not available for this analysis")
 
         # Construct full path from relative path
         full_path = os.path.join("data", "outputs", analysis.dashboard_path)
+        print(f"[API] Full path constructed: {full_path}")
+        print(f"[API] File exists: {os.path.exists(full_path)}")
 
         if not os.path.exists(full_path):
+            print(f"[API] File not found at path: {full_path}")
             raise HTTPException(status_code=404, detail="Dashboard file not found")
 
         # Read and return HTML content
@@ -164,21 +243,30 @@ async def get_report(
     Serve the markdown report for an analysis.
     """
     try:
+        print(f"[API] Report request for analysis: {analysis_id}")
         analysis = AnalysisSessionRepository.get_by_id(
             session=db,
             analysis_id=analysis_id
         )
 
         if not analysis:
+            print(f"[API] Analysis not found in database")
             raise HTTPException(status_code=404, detail="Analysis not found")
 
+        print(f"[API] Analysis found. Status: {analysis.status}")
+        print(f"[API] Report path in DB: {analysis.report_path}")
+
         if not analysis.report_path:
+            print(f"[API] Report path is None or empty")
             raise HTTPException(status_code=404, detail="Report not available for this analysis")
 
         # Construct full path from relative path
         full_path = os.path.join("data", "outputs", analysis.report_path)
+        print(f"[API] Full path constructed: {full_path}")
+        print(f"[API] File exists: {os.path.exists(full_path)}")
 
         if not os.path.exists(full_path):
+            print(f"[API] File not found at path: {full_path}")
             raise HTTPException(status_code=404, detail="Report file not found")
 
         # Read and return markdown content

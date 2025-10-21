@@ -1,0 +1,11 @@
+client_id,client_name,company_size,industry,registration_date
+101,Acme Corporation,250,Technology,2023-01-15
+102,Beta Industries,450,Manufacturing,2023-02-20
+103,Gamma Solutions,120,Consulting,2023-03-10
+104,Delta Enterprises,890,Finance,2023-04-05
+105,Epsilon Tech,340,Technology,2023-05-12
+106,Zeta Manufacturing,670,Manufacturing,2023-06-18
+107,Theta Consulting,210,Consulting,2023-07-22
+108,Iota Financial,520,Finance,2023-08-30
+109,Kappa Systems,180,Technology,2023-09-14
+110,Lambda Corp,410,Manufacturing,2023-10-25

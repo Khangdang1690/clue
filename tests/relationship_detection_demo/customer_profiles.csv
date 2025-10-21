@@ -1,0 +1,11 @@
+customer_code,email,phone,contact_person,preferred_language,account_status
+101,contact@acmecorp.com,+1-555-0101,John Smith,English,active
+102,info@betaind.com,+1-555-0102,Jane Doe,English,active
+103,hello@gammasol.com,+1-555-0103,Bob Johnson,English,active
+104,support@deltaent.com,+1-555-0104,Alice Williams,Spanish,active
+105,team@epsilontech.com,+1-555-0105,Charlie Brown,English,active
+106,contact@zetamfg.com,+1-555-0106,Diana Prince,French,active
+107,info@thetaconsult.com,+1-555-0107,Edward Norton,English,active
+108,hello@iotafin.com,+1-555-0108,Fiona Green,English,active
+109,support@kappasys.com,+1-555-0109,George Miller,German,active
+110,team@lambdacorp.com,+1-555-0110,Helen Carter,English,active

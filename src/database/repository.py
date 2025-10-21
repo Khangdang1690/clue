@@ -664,11 +664,16 @@ class AnalysisSessionRepository:
         analytics_summary: dict
     ) -> AnalysisSession:
         """Mark analysis as completed with results."""
+        print(f"[REPO] mark_completed called for analysis: {analysis_id}")
+        print(f"[REPO]   dashboard_path: {dashboard_path}")
+        print(f"[REPO]   report_path: {report_path}")
+
         analysis = session.query(AnalysisSession).filter(
             AnalysisSession.id == analysis_id
         ).first()
 
         if analysis:
+            print(f"[REPO] Analysis found, updating fields")
             analysis.status = 'completed'
             analysis.completed_at = datetime.utcnow()
             analysis.dashboard_path = dashboard_path
@@ -677,7 +682,12 @@ class AnalysisSessionRepository:
             analysis.insights_generated = insights_count
             analysis.recommendations_generated = recommendations_count
             analysis.analytics_summary = analytics_summary
+
+            print(f"[REPO] Calling session.flush()")
             session.flush()
+            print(f"[REPO] Flush completed. Analysis.dashboard_path = {analysis.dashboard_path}")
+        else:
+            print(f"[REPO WARNING] Analysis {analysis_id} not found in database!")
 
         return analysis
 

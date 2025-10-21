@@ -206,8 +206,49 @@ class RelationshipDetector:
         """
         matches = []
 
-        # Only analyze name match candidates (avoid scoring all column pairs)
-        for candidate in name_matches:
+        # Build candidate list: name matches + all key-to-key pairs
+        candidates = list(name_matches)
+
+        # Add all key-to-key relationships (even if names don't match)
+        # This allows LLM to detect semantic relationships like client_id ↔ user_id ↔ customer_code
+        dataset_ids = list(datasets.keys())
+        seen_pairs = set()
+
+        # Track name match pairs to avoid duplicates
+        for match in name_matches:
+            key = (match['from_dataset_id'], match['to_dataset_id'],
+                   match['from_column'], match['to_column'])
+            seen_pairs.add(key)
+
+        # Add key-to-key candidates
+        for i, from_id in enumerate(dataset_ids):
+            from_meta = metadata.get(from_id, {})
+            from_col_semantics = from_meta.get('column_semantics', {})
+
+            for to_id in dataset_ids[i+1:]:
+                to_meta = metadata.get(to_id, {})
+                to_col_semantics = to_meta.get('column_semantics', {})
+
+                # Find all key columns in both datasets
+                for from_col, from_col_meta in from_col_semantics.items():
+                    if from_col_meta.get('semantic_type') == 'key':
+                        for to_col, to_col_meta in to_col_semantics.items():
+                            if to_col_meta.get('semantic_type') == 'key':
+                                key = (from_id, to_id, from_col, to_col)
+                                if key not in seen_pairs:
+                                    candidates.append({
+                                        'from_dataset_id': from_id,
+                                        'to_dataset_id': to_id,
+                                        'from_column': from_col,
+                                        'to_column': to_col,
+                                        'name_similarity': 0.0  # No name match
+                                    })
+                                    seen_pairs.add(key)
+
+        print(f"    [LLM] Evaluating {len(candidates)} candidates ({len(name_matches)} from name matching, {len(candidates) - len(name_matches)} key-to-key pairs)")
+
+        # Analyze all candidates with LLM
+        for candidate in candidates:
             from_dataset_id = candidate['from_dataset_id']
             to_dataset_id = candidate['to_dataset_id']
             from_col = candidate['from_column']
@@ -286,6 +327,8 @@ Score this as a foreign key relationship:""")
                 llm_result = json.loads(response_text)
                 score = float(llm_result.get('score', 0.0))
                 reasoning = llm_result.get('reasoning', '')
+
+                print(f"    [LLM] {from_col} -> {to_col}: score={score:.2f}, reasoning={reasoning}")
 
                 # Only add if LLM thinks it's likely a relationship (>0.7)
                 if score >= 0.7:
@@ -516,10 +559,14 @@ Return valid relationship indices:""")
         })
 
         try:
+            print(f"    [LLM] Semantic validation response: {result.content.strip()}")
             valid_indices = json.loads(result.content.strip())
             validated = [candidate_relationships[i] for i in valid_indices if i < len(candidate_relationships)]
 
             print(f"[STEP 5] Semantic validation: {len(validated)}/{len(candidate_relationships)} relationships confirmed")
+            if len(validated) < len(candidate_relationships):
+                rejected = len(candidate_relationships) - len(validated)
+                print(f"    Rejected {rejected} relationships as redundant or invalid")
             return validated
 
         except json.JSONDecodeError:
