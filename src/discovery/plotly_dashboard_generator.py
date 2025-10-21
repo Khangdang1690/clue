@@ -448,10 +448,11 @@ class PlotlyDashboardGenerator:
         """
         Create Plotly JavaScript code for a chart.
 
-        Handles three data formats:
+        Handles four data formats:
         1. LLM datasets format: {'labels': [...], 'datasets': [{'label': 'X', 'data': [...]}]}
-        2. LLM simple format: {'chart_type': 'bar', 'data': [...], 'labels': [...]}
-        3. Legacy format: {'x': [...], 'y': [...], 'labels': {'x': '...', 'y': '...'}}
+        2. Nested data array: {'data': [{'x': [...], 'y': [...], 'mode': '...'}], 'labels': {...}}
+        3. LLM simple format: {'chart_type': 'bar', 'data': [...], 'labels': [...]}
+        4. Legacy format: {'x': [...], 'y': [...], 'labels': {'x': '...', 'y': '...'}}
 
         Args:
             viz_id: Unique ID for the chart
@@ -523,8 +524,62 @@ class PlotlyDashboardGenerator:
                 # Use first dataset label as y-axis hint
                 y_label = datasets[0].get('label', 'Y')
 
+        elif 'data' in data and isinstance(data.get('data'), list) and len(data.get('data', [])) > 0 and isinstance(data['data'][0], dict) and 'x' in data['data'][0]:
+            # Format 3: Nested data array format {'data': [{'x': [...], 'y': [...], 'mode': '...'}], 'labels': {...}}
+            # This is used by scatter plots and other chart types with nested data
+            data_array = data.get('data', [])
+            labels = data.get('labels', {})
+
+            # Extract axis labels
+            x_label = labels.get('x', 'X') if isinstance(labels, dict) else 'X'
+            y_label = labels.get('y', 'Y') if isinstance(labels, dict) else 'Y'
+
+            # Build traces from the data array
+            colors = [
+                '#667eea', '#764ba2', '#4facfe', '#43e97b', '#fa709a',
+                '#fee140', '#30cfd0', '#c471ed', '#f38181', '#f093fb',
+                '#66bb6a', '#ef5350', '#42a5f5', '#ab47bc', '#ffa726',
+                '#26c6da', '#9ccc65', '#5c6bc0', '#ec407a', '#ffca28'
+            ]
+
+            traces = []
+            for idx, data_item in enumerate(data_array):
+                color = colors[(viz_id + idx) % len(colors)]
+
+                # Extract data from the nested object
+                x_data = data_item.get('x', [])
+                y_data = data_item.get('y', [])
+                mode = data_item.get('mode', 'markers')
+                name = data_item.get('name', f'Series {idx + 1}')
+
+                trace = {
+                    'x': x_data,
+                    'y': y_data,
+                    'name': name if len(data_array) > 1 else None,  # Only show name if multiple series
+                    'type': self._plotly_chart_type(chart_type),
+                    'mode': mode if chart_type in ['scatter', 'line'] else None,
+                    'marker': {
+                        'color': color,
+                        'size': 8 if chart_type == 'scatter' else 6,
+                        'line': {
+                            'color': 'white',
+                            'width': 1
+                        }
+                    },
+                    'line': {
+                        'color': color,
+                        'width': 2
+                    } if 'lines' in mode or chart_type == 'line' else None,
+                    'hovertemplate': '<b>%{x}</b><br>%{y:,.2f}<extra></extra>'
+                }
+                # Remove None values
+                trace = {k: v for k, v in trace.items() if v is not None}
+                traces.append(trace)
+
+            traces_json = json.dumps(traces)
+
         elif 'data' in data and isinstance(data.get('labels'), list):
-            # Format 3: LLM simple format {'chart_type': 'bar', 'data': [...], 'labels': [...]}
+            # Format 4: LLM simple format {'chart_type': 'bar', 'data': [...], 'labels': [...]}
             x_data = data.get('labels', [])
             y_data = data.get('data', [])
 

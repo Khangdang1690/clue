@@ -363,3 +363,136 @@ async def get_dataset_data(
             status_code=500,
             detail=f"Failed to fetch dataset data: {str(e)}"
         )
+
+
+@router.get("/schema")
+async def get_schema(
+    user_id: str = Depends(get_user_id_from_header),
+    db: Session = Depends(get_db)
+):
+    """
+    Get complete schema view: all datasets with their columns and relationships.
+
+    Returns:
+        {
+            "datasets": [
+                {
+                    "id": "uuid",
+                    "name": "table_name",
+                    "domain": "Sales",
+                    "description": "...",
+                    "row_count": 1234,
+                    "columns": [
+                        {
+                            "name": "customer_id",
+                            "data_type": "string",
+                            "semantic_type": "key",
+                            "is_primary_key": true,
+                            "is_foreign_key": false,
+                            "business_meaning": "..."
+                        }
+                    ]
+                }
+            ],
+            "relationships": [
+                {
+                    "id": "uuid",
+                    "from_dataset_id": "uuid1",
+                    "to_dataset_id": "uuid2",
+                    "from_column": "customer_id",
+                    "to_column": "customer_id",
+                    "relationship_type": "one_to_many",
+                    "confidence": 0.95,
+                    "match_percentage": 98.5
+                }
+            ]
+        }
+    """
+    # Get user's company
+    company = CompanyService.get_user_company(db, user_id)
+    if not company:
+        raise HTTPException(
+            status_code=400,
+            detail="User must create a company first"
+        )
+
+    try:
+        from src.database.models import ColumnMetadata, TableRelationship
+
+        # Get all datasets for this company
+        datasets = DatasetRepository.get_datasets_by_company(db, company.id)
+
+        # Build dataset schema
+        datasets_schema = []
+        for dataset in datasets:
+            # Get columns for this dataset
+            columns = db.query(ColumnMetadata).filter(
+                ColumnMetadata.dataset_id == dataset.id
+            ).order_by(ColumnMetadata.position).all()
+
+            columns_data = [
+                {
+                    "name": col.column_name,
+                    "data_type": col.data_type,
+                    "semantic_type": col.semantic_type,
+                    "is_primary_key": col.is_primary_key,
+                    "is_foreign_key": col.is_foreign_key,
+                    "business_meaning": col.business_meaning,
+                    "position": col.position
+                }
+                for col in columns
+            ]
+
+            datasets_schema.append({
+                "id": dataset.id,
+                "name": dataset.table_name,
+                "original_filename": dataset.original_filename,
+                "domain": dataset.domain,
+                "description": dataset.description,
+                "row_count": dataset.row_count,
+                "column_count": dataset.column_count,
+                "columns": columns_data,
+                # Business context fields
+                "department": dataset.department,
+                "dataset_type": dataset.dataset_type,
+                "time_period": dataset.time_period,
+                "entities": dataset.entities or [],
+                "typical_use_cases": dataset.typical_use_cases or [],
+                "business_context": dataset.business_context or {}
+            })
+
+        # Get all relationships for datasets in this company
+        dataset_ids = [d.id for d in datasets]
+
+        relationships = db.query(TableRelationship).filter(
+            TableRelationship.from_dataset_id.in_(dataset_ids)
+        ).all()
+
+        relationships_data = [
+            {
+                "id": rel.id,
+                "from_dataset_id": rel.from_dataset_id,
+                "to_dataset_id": rel.to_dataset_id,
+                "from_column": rel.from_column,
+                "to_column": rel.to_column,
+                "relationship_type": rel.relationship_type,
+                "confidence": float(rel.confidence) if rel.confidence else 0.0,
+                "match_percentage": float(rel.match_percentage) if rel.match_percentage else 0.0,
+                "join_strategy": rel.join_strategy
+            }
+            for rel in relationships
+        ]
+
+        return {
+            "datasets": datasets_schema,
+            "relationships": relationships_data
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"\n[ERROR] Get schema failed:")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch schema: {str(e)}"
+        )

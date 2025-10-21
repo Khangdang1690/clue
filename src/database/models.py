@@ -36,6 +36,7 @@ class User(Base):
 
     # Relationships
     company = relationship("Company", back_populates="users")
+    analysis_sessions = relationship("AnalysisSession", back_populates="user", cascade="all, delete-orphan")
 
 
 class Company(Base):
@@ -221,6 +222,7 @@ class AnalysisSession(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id = Column(String, ForeignKey('companies.id'), nullable=False)
+    user_id = Column(String, ForeignKey('users.id'), nullable=False)  # NEW: Track who ran it
 
     # Session info
     name = Column(String)
@@ -229,13 +231,19 @@ class AnalysisSession(Base):
 
     # Results
     insights_generated = Column(Integer, default=0)
-    report_path = Column(String)
+    recommendations_generated = Column(Integer, default=0)  # NEW
+    executive_summary = Column(Text)  # NEW: For preview in UI
+    report_path = Column(String)  # NEW: Relative path to markdown report
+    dashboard_path = Column(String)  # NEW: Relative path to dashboard HTML
+    analytics_summary = Column(JSON)  # NEW: Summary stats {anomalies_count, forecasts_count, etc.}
 
     # Timestamps
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
 
     status = Column(String, default='running')  # running, completed, failed
+    error_message = Column(Text)  # NEW: Store error if failed
 
     # Relationships
     company = relationship("Company", back_populates="analysis_sessions")
+    user = relationship("User", back_populates="analysis_sessions")  # NEW: Link to user

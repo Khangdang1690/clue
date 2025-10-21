@@ -47,6 +47,14 @@ class DatasetResponse(BaseModel):
     row_count: Optional[int] = None
     column_count: Optional[int] = None
     uploaded_at: datetime
+    # Business context fields
+    department: Optional[str] = None
+    description: Optional[str] = None
+    dataset_type: Optional[str] = None
+    time_period: Optional[str] = None
+    entities: Optional[List[str]] = None
+    typical_use_cases: Optional[List[str]] = None
+    business_context: Optional[dict] = None
 
     class Config:
         from_attributes = True

@@ -37,3 +37,25 @@ class ETLResponse(BaseModel):
     datasets_created: int
     datasets: List[dict] = []
     errors: List[str] = []
+
+
+class BusinessDiscoveryRequest(BaseModel):
+    """Request schema for running business discovery workflow."""
+    user_id: str
+    dataset_ids: Optional[List[str]] = None  # If None, analyze all datasets
+    analysis_name: Optional[str] = "Business Analysis"
+
+
+class BusinessDiscoveryResponse(BaseModel):
+    """Response schema for business discovery workflow."""
+    success: bool
+    analysis_id: Optional[str] = None  # ID of the analysis session
+    company_id: str
+    dataset_count: int
+    insights: List[dict] = []
+    synthesized_insights: List[dict] = []
+    recommendations: List[dict] = []
+    analytics_results: Optional[dict] = None
+    executive_summary: Optional[str] = None
+    dashboard_url: Optional[str] = None
+    error: Optional[str] = None

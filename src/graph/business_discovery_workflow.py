@@ -23,6 +23,7 @@ class BusinessDiscoveryState(Dict):
     """State for business discovery workflow."""
     company_id: str
     dataset_ids: List[str]
+    analysis_id: Optional[str]  # Unique ID for this analysis session
     datasets: Dict[str, pd.DataFrame]
     metadata: Dict[str, Any]
     business_context: Dict[str, Any]
@@ -102,7 +103,8 @@ class BusinessDiscoveryWorkflow:
     def run_discovery(self,
                      company_id: str,
                      dataset_ids: List[str],
-                     analysis_name: str = "Business Analysis") -> BusinessDiscoveryState:
+                     analysis_name: str = "Business Analysis",
+                     analysis_id: str = None) -> BusinessDiscoveryState:
         """Run the business discovery workflow."""
 
         print("\n" + "="*80)
@@ -111,10 +113,13 @@ class BusinessDiscoveryWorkflow:
         print(f"Company ID: {company_id}")
         print(f"Datasets: {len(dataset_ids)}")
         print(f"Analysis: {analysis_name}")
+        if analysis_id:
+            print(f"Analysis ID: {analysis_id}")
 
         initial_state = BusinessDiscoveryState(
             company_id=company_id,
             dataset_ids=dataset_ids,
+            analysis_id=analysis_id,  # NEW: Pass analysis_id through state
             datasets={},
             metadata={},
             business_context={},
@@ -151,7 +156,14 @@ class BusinessDiscoveryWorkflow:
             for name, df in datasets.items():
                 print(f"  [OK] {name}: {df.shape[0]:,} rows x {df.shape[1]} columns")
 
+            # Create analysis directory early so viz_data.json is stored there
+            company_id = state['company_id']
+            analysis_id = state.get('analysis_id')
+            analysis_dir = os.path.join("data", "outputs", "analyses", company_id, analysis_id)
+            os.makedirs(analysis_dir, exist_ok=True)
+
             # Initialize visualization data store for this analysis
+            # Pass analysis_dir so viz_data.json is stored alongside report and dashboard
             company_name = state.get('company_name', 'unknown_company')
             self.viz_data_store = VisualizationDataStore(
                 dataset_name=f"business_discovery_{company_name}",
@@ -159,7 +171,8 @@ class BusinessDiscoveryWorkflow:
                     'company_id': state['company_id'],
                     'datasets': list(datasets.keys()),
                     'analysis_type': 'business_discovery'
-                }
+                },
+                output_dir=analysis_dir  # Save viz_data.json to analysis directory
             )
             state['viz_data_path'] = str(self.viz_data_store.json_path)
 
@@ -838,35 +851,50 @@ Return your response as a JSON array:
         print("\n[STEP 8] Generating Business Report")
         print("-" * 40)
 
-        # Create report directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_dir = os.path.join(
-            "data", "outputs", "business_discovery",
-            f"analysis_{timestamp}"
-        )
-        os.makedirs(report_dir, exist_ok=True)
+        # Get company_id and analysis_id from state
+        company_id = state.get('company_id')
+        analysis_id = state.get('analysis_id', f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+
+        # Create company-specific directory structure
+        # Format: data/outputs/analyses/{company_id}/{analysis_id}/
+        analysis_dir = os.path.join("data", "outputs", "analyses", company_id, analysis_id)
+        os.makedirs(analysis_dir, exist_ok=True)
 
         # Generate executive summary
         state['executive_summary'] = self._generate_executive_summary(state)
 
-        # Write report
-        report_path = os.path.join(report_dir, "business_report.md")
-        self._write_business_report(state, report_path)
+        # Write report to company-specific directory
+        report_filename = "report.md"
+        report_full_path = os.path.join(analysis_dir, report_filename)
+        self._write_business_report(state, report_full_path)
 
-        state['report_path'] = report_path
+        # Store RELATIVE path (for database storage)
+        report_relative_path = os.path.join("analyses", company_id, analysis_id, report_filename)
+        state['report_path'] = report_relative_path
+
         state['status'] = 'completed'
 
-        print(f"  [OK] Report saved: {report_path}")
+        print(f"  [OK] Report saved: {report_full_path}")
+        print(f"  [OK] Relative path: {report_relative_path}")
 
         # Generate Plotly dashboard if viz_data was created
         if state.get('viz_data_path') and self.viz_data_store:
             try:
+                # Specify output path in company-specific directory
+                dashboard_filename = "dashboard.html"
+                dashboard_full_path = os.path.join(analysis_dir, dashboard_filename)
+
                 dashboard_path = self.dashboard_generator.generate_dashboard(
                     viz_data_json_path=state['viz_data_path'],
-                    output_path=None  # Will auto-generate path
+                    output_path=dashboard_full_path
                 )
-                state['dashboard_path'] = dashboard_path
-                print(f"  [OK] Dashboard generated: {dashboard_path}")
+
+                # Store RELATIVE path (for database storage)
+                dashboard_relative_path = os.path.join("analyses", company_id, analysis_id, dashboard_filename)
+                state['dashboard_path'] = dashboard_relative_path
+
+                print(f"  [OK] Dashboard generated: {dashboard_full_path}")
+                print(f"  [OK] Relative path: {dashboard_relative_path}")
             except Exception as e:
                 print(f"  [WARN] Dashboard generation failed: {e}")
 
@@ -985,43 +1013,81 @@ if len(numeric_cols) > 0:
 
         recommendations = []
 
-        # Generic recommendations based on analytical patterns, not domain keywords
-        finding = insight.get('finding', '').lower()
+        # Get text content from either synthesized insights or raw insights
+        narrative = insight.get('narrative', '')
+        finding = insight.get('finding', '')
+        business_impact = insight.get('business_impact', '')
+        priority = insight.get('priority', 'Medium')
+
+        # Combine all text for pattern matching
+        text = f"{narrative} {finding} {business_impact}".lower()
+        title = insight.get('title', 'Unknown')
+
+        # If no text content, skip
+        if not text.strip():
+            return recommendations
 
         # Pattern: High value/top performers
-        if ('high' in finding or 'top' in finding) and ('value' in finding or 'perform' in finding):
+        if ('high' in text and 'value' in text) or ('top' in text and 'perform' in text) or 'enterprise' in text:
             recommendations.append({
-                'action': 'Focus efforts on maintaining and expanding top performers identified',
-                'rationale': insight['finding'],
-                'impact': 'High',
+                'action': f'Focus on high-value segments identified: {title}',
+                'rationale': narrative or finding or 'Target high-value customer segments',
+                'impact': priority,
                 'urgency': 'Medium'
             })
 
         # Pattern: Decline or negative trend
-        if 'decline' in finding or 'decrease' in finding or 'drop' in finding:
+        if any(word in text for word in ['decline', 'decrease', 'drop', 'falling', 'churn', 'loss']):
             recommendations.append({
-                'action': 'Investigate root causes of decline and develop corrective action plan',
-                'rationale': insight['finding'],
+                'action': f'Address decline: {title}',
+                'rationale': narrative or finding or 'Investigate and reverse negative trends',
                 'impact': 'High',
                 'urgency': 'High'
             })
 
         # Pattern: Opportunity or growth
-        if 'opportunit' in finding or 'grow' in finding or 'increas' in finding:
+        if any(word in text for word in ['opportunit', 'grow', 'increas', 'expand', 'potential']):
             recommendations.append({
-                'action': 'Develop strategy to capitalize on growth opportunity identified',
-                'rationale': insight['finding'],
-                'impact': 'Medium',
+                'action': f'Capitalize on opportunity: {title}',
+                'rationale': narrative or finding or 'Develop growth strategy',
+                'impact': priority,
                 'urgency': 'Medium'
             })
 
-        # Pattern: Risk or anomaly
-        if 'risk' in finding or 'anomal' in finding or 'unusual' in finding:
+        # Pattern: Risk, anomaly, or data quality
+        if any(word in text for word in ['risk', 'anomal', 'unusual', 'concern', 'data quality', 'integrity']):
             recommendations.append({
-                'action': 'Monitor and mitigate identified risks through targeted interventions',
-                'rationale': insight['finding'],
+                'action': f'Investigate and mitigate: {title}',
+                'rationale': narrative or finding or 'Monitor and address identified risks',
                 'impact': 'High',
                 'urgency': 'High'
+            })
+
+        # Pattern: Pricing and profitability
+        if any(word in text for word in ['pric', 'profit', 'margin', 'discount', 'revenue']):
+            recommendations.append({
+                'action': f'Optimize pricing strategy: {title}',
+                'rationale': narrative or finding or 'Review and optimize pricing and profitability',
+                'impact': priority,
+                'urgency': 'Medium'
+            })
+
+        # Pattern: Marketing and customer acquisition
+        if any(word in text for word in ['marketing', 'traffic', 'customer acquisition', 'spend']):
+            recommendations.append({
+                'action': f'Optimize marketing investments: {title}',
+                'rationale': narrative or finding or 'Refine marketing and customer acquisition strategy',
+                'impact': priority,
+                'urgency': 'Medium'
+            })
+
+        # Pattern: Customer segmentation
+        if any(word in text for word in ['segment', 'industry', 'region', 'category', 'group']):
+            recommendations.append({
+                'action': f'Tailor strategy by segment: {title}',
+                'rationale': narrative or finding or 'Develop segment-specific strategies',
+                'impact': priority,
+                'urgency': 'Low'
             })
 
         return recommendations
@@ -1063,7 +1129,7 @@ if len(numeric_cols) > 0:
     def _write_business_report(self, state: BusinessDiscoveryState, report_path: str):
         """Write the business report with synthesized narratives."""
 
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write(state['executive_summary'])
 
             f.write("\n\n## Detailed Analysis\n")
@@ -1087,12 +1153,116 @@ if len(numeric_cols) > 0:
                     f.write(f"   - {insight.get('finding', insight.get('description', 'N/A'))}\n")
 
             # Recommendations section
-            f.write("\n### Recommendations\n")
-            for i, rec in enumerate(state['recommendations'], 1):
-                f.write(f"\n{i}. **{rec['action']}**\n")
-                if 'rationale' in rec:
-                    f.write(f"   - Rationale: {rec['rationale']}\n")
-                f.write(f"   - Impact: {rec.get('impact', 'Unknown')}\n")
+            f.write("\n### Recommendations\n\n")
+            if state.get('recommendations'):
+                for i, rec in enumerate(state['recommendations'], 1):
+                    f.write(f"{i}. **{rec['action']}**\n")
+                    if 'rationale' in rec and rec['rationale']:
+                        # Truncate long rationales
+                        rationale = rec['rationale'][:300] + '...' if len(rec['rationale']) > 300 else rec['rationale']
+                        f.write(f"   - **Rationale**: {rationale}\n")
+                    f.write(f"   - **Impact**: {rec.get('impact', 'Medium')}\n")
+                    f.write(f"   - **Urgency**: {rec.get('urgency', 'Medium')}\n\n")
+            else:
+                f.write("*No specific recommendations generated. Review the business narratives above for strategic guidance.*\n")
+
+            # Advanced Analytics section
+            analytics_results = state.get('analytics_results', {})
+            if analytics_results:
+                f.write("\n## Advanced Analytics\n")
+                f.write("\n*Powered by statistical analysis and machine learning models*\n\n")
+
+                # Anomaly Detection Results
+                anomalies = analytics_results.get('anomalies', [])
+                if anomalies:
+                    f.write("\n### Anomalies Detected\n")
+                    f.write(f"\nFound {len(anomalies)} unusual patterns in your data:\n\n")
+                    f.write("| Dataset | Column | Count | Anomaly Rate | Detection Method | Sample Values |\n")
+                    f.write("|---------|--------|-------|--------------|------------------|---------------|\n")
+                    for anomaly in anomalies[:20]:  # Limit to top 20
+                        dataset = anomaly.get('table', 'N/A')
+                        column = anomaly.get('column', 'N/A')
+                        count = anomaly.get('num_anomalies', 'N/A')
+                        rate = anomaly.get('anomaly_rate', 0)
+                        method = anomaly.get('detection_method', 'N/A')
+
+                        # Extract sample anomalous values
+                        sample = anomaly.get('anomalies_sample', [])
+                        if sample:
+                            sample_values = ', '.join([f"{a.get('value', 'N/A'):.2f}" if isinstance(a.get('value'), (int, float)) else str(a.get('value', 'N/A')) for a in sample[:3]])
+                        else:
+                            sample_values = 'N/A'
+
+                        rate_pct = f"{rate*100:.1f}%" if isinstance(rate, (int, float)) else str(rate)
+                        f.write(f"| {dataset} | {column} | {count} | {rate_pct} | {method} | {sample_values} |\n")
+
+                # Time Series Forecasts
+                forecasts = analytics_results.get('forecasts', [])
+                if forecasts:
+                    f.write("\n### 7-Day Forecasts\n")
+                    f.write(f"\nGenerated {len(forecasts)} forecasts for key metrics:\n\n")
+                    for forecast in forecasts[:10]:  # Limit to 10 forecasts
+                        table = forecast.get('table', 'N/A')
+                        metric = forecast.get('metric', 'N/A')
+                        model = forecast.get('model_name', 'N/A')
+
+                        f.write(f"\n**{table}.{metric}** (Model: {model})\n\n")
+                        f.write("| Day | Forecast Value |\n")
+                        f.write("|-----|----------------|\n")
+
+                        # forecast_values is a dict or array from the predictions
+                        values = forecast.get('forecast_values', {})
+                        if isinstance(values, dict):
+                            predictions = values.get('yhat', []) if 'yhat' in values else []
+                        elif isinstance(values, list):
+                            predictions = values
+                        else:
+                            predictions = []
+
+                        for i, val in enumerate(predictions[:7], 1):  # 7 days
+                            if isinstance(val, (int, float)):
+                                f.write(f"| Day {i} | {val:.2f} |\n")
+                            else:
+                                f.write(f"| Day {i} | {val} |\n")
+
+                # Causal Relationships
+                causal_relationships = analytics_results.get('causal_relationships', [])
+                if causal_relationships:
+                    f.write("\n### Causal Relationships\n")
+                    f.write(f"\nIdentified {len(causal_relationships)} cause-effect relationships:\n\n")
+                    f.write("| Cause | Effect | Strength | P-Value | Dataset |\n")
+                    f.write("|-------|--------|----------|---------|----------|\n")
+                    for rel in causal_relationships[:15]:  # Top 15
+                        cause = rel.get('cause', 'N/A')
+                        effect = rel.get('effect', 'N/A')
+                        strength = rel.get('strength', 'N/A')
+                        p_value = rel.get('p_value', 'N/A')
+                        table = rel.get('table', 'N/A')
+
+                        # Format p-value
+                        if isinstance(p_value, (int, float)):
+                            p_str = f"{p_value:.4f}"
+                        else:
+                            p_str = str(p_value)
+
+                        f.write(f"| {cause} | {effect} | {strength} | {p_str} | {table} |\n")
+
+                # Variance Decomposition
+                variance_decomposition = analytics_results.get('variance_decomposition', [])
+                if variance_decomposition:
+                    f.write("\n### Variance Analysis\n")
+                    f.write("\nWhat drives the variation in your key metrics:\n\n")
+                    for decomp in variance_decomposition:
+                        metric = decomp.get('metric', 'N/A')
+                        f.write(f"\n**{metric}**\n\n")
+                        f.write("| Component | Contribution | Percentage |\n")
+                        f.write("|-----------|--------------|------------|\n")
+                        components = decomp.get('components', [])
+                        for comp in components:
+                            name = comp.get('name', 'N/A')
+                            contribution = comp.get('contribution', 'N/A')
+                            percentage = comp.get('percentage', 'N/A')
+                            f.write(f"| {name} | {contribution} | {percentage} |\n")
 
             # Data analyzed section
             f.write("\n## Data Analyzed\n")

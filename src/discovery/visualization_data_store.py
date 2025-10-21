@@ -15,24 +15,31 @@ class VisualizationDataStore:
     during the autonomous exploration process.
     """
 
-    def __init__(self, dataset_name: str, dataset_context: Optional[Dict] = None):
+    def __init__(self, dataset_name: str, dataset_context: Optional[Dict] = None, output_dir: Optional[str] = None):
         """
         Initialize viz data store.
 
         Args:
             dataset_name: Name of the dataset
             dataset_context: Optional context about the dataset
+            output_dir: Optional custom output directory. If not provided, uses default.
         """
         self.dataset_name = dataset_name
         self.dataset_context = dataset_context or {}
 
         # Create output directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_dir = Path("data/outputs/discovery/viz_data")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        # JSON file path
-        self.json_path = self.output_dir / f"viz_data_{dataset_name}_{timestamp}.json"
+        if output_dir:
+            # Use custom output directory (e.g., analysis-specific directory)
+            self.output_dir = Path(output_dir)
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            # Use simple filename in custom directory
+            self.json_path = self.output_dir / "viz_data.json"
+        else:
+            # Use default directory with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.output_dir = Path("data/outputs/discovery/viz_data")
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.json_path = self.output_dir / f"viz_data_{dataset_name}_{timestamp}.json"
 
         # Thread lock for safe concurrent writes
         self._lock = Lock()

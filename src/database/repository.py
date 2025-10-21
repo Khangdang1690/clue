@@ -596,6 +596,145 @@ class AnalysisSessionRepository:
     """Repository for analysis sessions."""
 
     @staticmethod
+    def create(
+        session: Session,
+        user_id: str,
+        company_id: str,
+        dataset_ids: List[str],
+        name: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> AnalysisSession:
+        """Create a new analysis session."""
+        analysis_session = AnalysisSession(
+            user_id=user_id,
+            company_id=company_id,
+            name=name or "Business Analysis",
+            dataset_ids=dataset_ids,
+            description=description,
+            status='running'
+        )
+        session.add(analysis_session)
+        session.flush()
+        return analysis_session
+
+    @staticmethod
+    def get_by_id(session: Session, analysis_id: str) -> Optional[AnalysisSession]:
+        """Get analysis session by ID."""
+        return session.query(AnalysisSession).filter(
+            AnalysisSession.id == analysis_id
+        ).first()
+
+    @staticmethod
+    def get_by_user(
+        session: Session,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[AnalysisSession]:
+        """Get all analyses for a user, ordered by most recent first."""
+        return session.query(AnalysisSession).filter(
+            AnalysisSession.user_id == user_id
+        ).order_by(
+            AnalysisSession.started_at.desc()
+        ).limit(limit).offset(offset).all()
+
+    @staticmethod
+    def get_by_company(
+        session: Session,
+        company_id: str,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[AnalysisSession]:
+        """Get all analyses for a company."""
+        return session.query(AnalysisSession).filter(
+            AnalysisSession.company_id == company_id
+        ).order_by(
+            AnalysisSession.started_at.desc()
+        ).limit(limit).offset(offset).all()
+
+    @staticmethod
+    def mark_completed(
+        session: Session,
+        analysis_id: str,
+        dashboard_path: str,
+        report_path: str,
+        executive_summary: str,
+        insights_count: int,
+        recommendations_count: int,
+        analytics_summary: dict
+    ) -> AnalysisSession:
+        """Mark analysis as completed with results."""
+        analysis = session.query(AnalysisSession).filter(
+            AnalysisSession.id == analysis_id
+        ).first()
+
+        if analysis:
+            analysis.status = 'completed'
+            analysis.completed_at = datetime.utcnow()
+            analysis.dashboard_path = dashboard_path
+            analysis.report_path = report_path
+            analysis.executive_summary = executive_summary
+            analysis.insights_generated = insights_count
+            analysis.recommendations_generated = recommendations_count
+            analysis.analytics_summary = analytics_summary
+            session.flush()
+
+        return analysis
+
+    @staticmethod
+    def mark_failed(
+        session: Session,
+        analysis_id: str,
+        error_message: str
+    ) -> AnalysisSession:
+        """Mark analysis as failed with error message."""
+        analysis = session.query(AnalysisSession).filter(
+            AnalysisSession.id == analysis_id
+        ).first()
+
+        if analysis:
+            analysis.status = 'failed'
+            analysis.completed_at = datetime.utcnow()
+            analysis.error_message = error_message
+            session.flush()
+
+        return analysis
+
+    @staticmethod
+    def update(
+        session: Session,
+        analysis_id: str,
+        **kwargs
+    ) -> AnalysisSession:
+        """Update analysis session with arbitrary fields."""
+        analysis = session.query(AnalysisSession).filter(
+            AnalysisSession.id == analysis_id
+        ).first()
+
+        if analysis:
+            for key, value in kwargs.items():
+                if hasattr(analysis, key):
+                    setattr(analysis, key, value)
+            session.flush()
+
+        return analysis
+
+    @staticmethod
+    def delete(session: Session, analysis_id: str) -> bool:
+        """Delete analysis session."""
+        analysis = session.query(AnalysisSession).filter(
+            AnalysisSession.id == analysis_id
+        ).first()
+
+        if analysis:
+            session.delete(analysis)
+            session.flush()
+            return True
+
+        return False
+
+    # Legacy method for backward compatibility
+    @staticmethod
     def create_session(
         session: Session,
         company_id: str,
@@ -603,8 +742,10 @@ class AnalysisSessionRepository:
         dataset_ids: List[str],
         description: Optional[str] = None
     ) -> AnalysisSession:
-        """Create a new analysis session."""
+        """Create a new analysis session (legacy method)."""
+        # Assume system user if not provided
         analysis_session = AnalysisSession(
+            user_id='system',  # Default for legacy calls
             company_id=company_id,
             name=name,
             dataset_ids=dataset_ids,
@@ -614,6 +755,7 @@ class AnalysisSessionRepository:
         session.flush()
         return analysis_session
 
+    # Legacy method for backward compatibility
     @staticmethod
     def update_session_status(
         session: Session,
@@ -622,7 +764,7 @@ class AnalysisSessionRepository:
         insights_generated: Optional[int] = None,
         report_path: Optional[str] = None
     ):
-        """Update analysis session status."""
+        """Update analysis session status (legacy method)."""
         analysis_session = session.query(AnalysisSession).filter(
             AnalysisSession.id == session_id
         ).first()
