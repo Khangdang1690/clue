@@ -3,6 +3,7 @@
 import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +11,12 @@ load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings."""
+
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore"  # Ignore extra fields like Cloud SQL metadata
+    )
 
     # App Info
     app_name: str = "iClue API"
@@ -34,11 +41,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
     # CORS
-    allowed_origins: list = ["http://localhost:3000"]
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    allowed_origins: list = [
+        "http://localhost:3000",  # Local development
+        "https://iclue-frontend.vercel.app",  # Production frontend
+    ]
 
 
 @lru_cache()

@@ -1,0 +1,101 @@
+# ============================================================================
+# .dockerignore - Files to exclude from Docker build context
+# ============================================================================
+# This reduces Docker image size and build time by excluding unnecessary files
+# ============================================================================
+
+# Python virtual environment (dependencies installed via requirements.txt)
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment files (secrets set via Cloud Run environment variables)
+.env
+.env.*
+*.env
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation and development files
+README.md
+DEPLOYMENT_GUIDE.md
+QUICK_START_DATABASE.md
+*.md
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data files (not needed in production)
+data/
+*.csv
+*.xlsx
+*.xls
+*.json
+*.db
+*.sqlite
+*.sqlite3
+
+# Build and distribution files
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+logs/
+
+# Cloud SQL initialization scripts (already run in Cloud SQL)
+cloud-sql-init.sql
+init.sql
+init_database.py
+clear_database.py
+
+# Database test scripts
+test_db_connection.py
+quick_db_test.sql
+
+# Docker compose (for local development only)
+docker-compose.yml
+docker-compose.*.yml
+
+# CI/CD files (if you add them later)
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# OS files
+Thumbs.db
+.DS_Store

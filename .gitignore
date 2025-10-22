@@ -12,6 +12,7 @@ __pycache__/
 *.pywzzz
 *.pyzzzz
 .env
+.env.cloud
 .data/
 .data/outputs/
 .data/outputs/discovery/
