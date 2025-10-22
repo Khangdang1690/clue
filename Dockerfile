@@ -52,9 +52,8 @@ COPY --chown=appuser:appuser . .
 # Switch to non-root user
 USER appuser
 
-# Expose port (Cloud Run will use PORT environment variable)
-ENV PORT=8000
-EXPOSE 8000
+# Expose port (Cloud Run sets PORT=8080 environment variable)
+EXPOSE 8080
 
 # Set Python to run in unbuffered mode (better for Cloud Run logs)
 ENV PYTHONUNBUFFERED=1
