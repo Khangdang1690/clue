@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.api.deps import get_db
+from app.core.config import get_settings
 from app.services.etl_service import ETLService
 from app.services.company_service import CompanyService
 from app.schemas.etl import DatasetResponse
@@ -80,6 +81,24 @@ async def upload_files(
                 detail=f"File type {file_ext} not supported. Allowed: {', '.join(allowed_extensions)}"
             )
 
+    # Validate file sizes
+    settings = get_settings()
+    max_file_size = settings.max_file_size_bytes
+
+    for file in files:
+        # Read file size by seeking to end
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()  # Get position (file size)
+        file.file.seek(0)  # Reset to beginning
+
+        if file_size > max_file_size:
+            size_mb = file_size / (1024 * 1024)
+            max_mb = settings.max_file_size_mb
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' is too large ({size_mb:.1f}MB). Maximum size: {max_mb}MB"
+            )
+
     # Parse force_actions if provided
     force_actions_dict = {}
     if force_actions:
@@ -89,8 +108,8 @@ async def upload_files(
             raise HTTPException(status_code=400, detail="Invalid force_actions JSON")
 
     try:
-        # Save uploaded files to temp directory
-        file_paths = await ETLService.save_uploaded_files(files)
+        # Save uploaded files to GCS and temp directory
+        file_paths = await ETLService.save_uploaded_files(files, company.id)
 
         # Map force actions - keep using filename as key since service expects it
         force_actions_by_filename = {}

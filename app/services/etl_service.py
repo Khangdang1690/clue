@@ -10,6 +10,7 @@ import asyncio
 from src.etl.dataset_manager import DatasetManager, UploadResult
 from src.graph.etl_workflow import ETLWorkflow
 from src.database.connection import DatabaseManager
+from app.services.storage_service import StorageService
 
 
 class ETLService:
@@ -340,26 +341,40 @@ class ETLService:
         return f"data: {json.dumps(data)}\n\n"
 
     @staticmethod
-    async def save_uploaded_files(files) -> List[str]:
+    async def save_uploaded_files(files, company_id: int) -> List[str]:
         """
-        Save uploaded files to temporary directory.
+        Save uploaded files to storage and temporary directory.
+
+        Strategy:
+        - Upload to storage (GCS in production, local in development)
+        - Also save to temp directory for ETL processing
+        - ETL workflow processes from temp files
+        - Temp files cleaned up after processing
 
         Args:
             files: List of UploadFile objects from FastAPI
+            company_id: Company ID for organizing storage
 
         Returns:
-            List of temporary file paths
+            List of temporary file paths (for ETL processing)
         """
-        temp_dir = tempfile.mkdtemp(prefix="clue_etl_")
+        storage_service = StorageService()
+        temp_dir = tempfile.mkdtemp(prefix="iclue_etl_")
         file_paths = []
 
         for file in files:
-            # Create temp file path
-            temp_path = os.path.join(temp_dir, file.filename)
+            # Read file content once
+            content = await file.read()
 
-            # Write file contents
+            # Upload to storage for permanent storage
+            storage_path = StorageService.get_gcs_path(company_id, file.filename)
+            storage_service.upload_file(content, storage_path)
+            storage_type = "GCS" if storage_service.use_gcs else "local storage"
+            print(f"[STORAGE] Uploaded {file.filename} to {storage_type}: {storage_path}")
+
+            # Also save to temp directory for ETL processing
+            temp_path = os.path.join(temp_dir, file.filename)
             with open(temp_path, 'wb') as f:
-                content = await file.read()
                 f.write(content)
 
             file_paths.append(temp_path)

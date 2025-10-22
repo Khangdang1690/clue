@@ -13,10 +13,43 @@ import json
 import shutil
 
 from app.api.deps import get_db
+from app.services.storage_service import StorageService
 from src.database.repository import AnalysisSessionRepository
 from src.database.models import User
 
 router = APIRouter()
+
+
+def get_file_content(file_path: str, as_string: bool = False, encoding: str = 'utf-8'):
+    """
+    Get file content from storage (GCS in production, local in development).
+
+    Args:
+        file_path: Path from database
+        as_string: If True, return as string; otherwise return as bytes
+        encoding: Text encoding for string mode
+
+    Returns:
+        File content as string or bytes
+    """
+    # Use StorageService which automatically handles ENV-based storage
+    storage_service = StorageService()
+
+    # Check if path starts with "data/outputs/" (old format - backward compatibility)
+    if file_path.startswith("data/outputs/"):
+        # Old format: local filesystem path - read directly
+        if as_string:
+            with open(file_path, 'r', encoding=encoding) as f:
+                return f.read()
+        else:
+            with open(file_path, 'rb') as f:
+                return f.read()
+    else:
+        # New format: storage path (GCS or local based on ENV)
+        if as_string:
+            return storage_service.download_as_string(file_path, encoding=encoding)
+        else:
+            return storage_service.download_as_bytes(file_path)
 
 
 @router.get("/analyses")
@@ -207,18 +240,13 @@ async def get_dashboard(
             print(f"[API] Dashboard path is None or empty")
             raise HTTPException(status_code=404, detail="Dashboard not available for this analysis")
 
-        # Construct full path from relative path
-        full_path = os.path.join("data", "outputs", analysis.dashboard_path)
-        print(f"[API] Full path constructed: {full_path}")
-        print(f"[API] File exists: {os.path.exists(full_path)}")
-
-        if not os.path.exists(full_path):
-            print(f"[API] File not found at path: {full_path}")
+        # Get content from storage
+        try:
+            html_content = get_file_content(analysis.dashboard_path, as_string=True)
+            print(f"[API] Dashboard loaded successfully from storage")
+        except Exception as e:
+            print(f"[API] Failed to load dashboard: {e}")
             raise HTTPException(status_code=404, detail="Dashboard file not found")
-
-        # Read and return HTML content
-        with open(full_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
 
         return HTMLResponse(content=html_content)
 
@@ -257,30 +285,20 @@ async def get_report(
             print(f"[API] Report path is None or empty")
             raise HTTPException(status_code=404, detail="Report not available for this analysis")
 
-        # Construct full path from relative path
-        full_path = os.path.join("data", "outputs", analysis.report_path)
-        print(f"[API] Full path constructed: {full_path}")
-        print(f"[API] File exists: {os.path.exists(full_path)}")
-
-        if not os.path.exists(full_path):
-            print(f"[API] File not found at path: {full_path}")
-            raise HTTPException(status_code=404, detail="Report file not found")
-
-        # Read and return markdown content
-        # Try UTF-8 first, fall back to Windows-1252 for legacy files
+        # Get content from storage
+        # Try UTF-8 first, fall back to cp1252 for legacy files
         try:
-            with open(full_path, 'r', encoding='utf-8') as f:
-                markdown_content = f.read()
+            markdown_content = get_file_content(analysis.report_path, as_string=True, encoding='utf-8')
+            print(f"[API] Report loaded successfully from storage")
         except UnicodeDecodeError:
-            # Try Windows-1252 (cp1252) which is the Windows default encoding
-            # This handles legacy reports with bullet points and other special chars
             try:
-                with open(full_path, 'r', encoding='cp1252') as f:
-                    markdown_content = f.read()
-            except UnicodeDecodeError:
-                # Last resort: UTF-8 with error replacement
-                with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
-                    markdown_content = f.read()
+                markdown_content = get_file_content(analysis.report_path, as_string=True, encoding='cp1252')
+            except Exception as e:
+                print(f"[API] Failed to load report: {e}")
+                raise HTTPException(status_code=404, detail="Report file not found")
+        except Exception as e:
+            print(f"[API] Failed to load report: {e}")
+            raise HTTPException(status_code=404, detail="Report file not found")
 
         return PlainTextResponse(content=markdown_content)
 
@@ -314,31 +332,32 @@ async def download_report(
         if not analysis.report_path:
             raise HTTPException(status_code=404, detail="Report not available for this analysis")
 
-        # Construct full path from relative path
-        full_path = os.path.join("data", "outputs", analysis.report_path)
-
-        if not os.path.exists(full_path):
-            raise HTTPException(status_code=404, detail="Report file not found")
-
+        # Get content from GCS or local filesystem
         # Read markdown with proper encoding
         try:
-            with open(full_path, 'r', encoding='utf-8') as f:
-                markdown_content = f.read()
+            markdown_content = get_file_content(analysis.report_path, as_string=True, encoding='utf-8')
         except UnicodeDecodeError:
             try:
-                with open(full_path, 'r', encoding='cp1252') as f:
-                    markdown_content = f.read()
-            except UnicodeDecodeError:
-                with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
-                    markdown_content = f.read()
+                markdown_content = get_file_content(analysis.report_path, as_string=True, encoding='cp1252')
+            except Exception as e:
+                raise HTTPException(status_code=404, detail="Report file not found")
+        except Exception as e:
+            raise HTTPException(status_code=404, detail="Report file not found")
 
         if format == "md":
             # Return raw markdown file
             filename = f"{analysis.name.replace(' ', '_')}_{analysis_id[:8]}.md"
+
+            # Create temp file for FileResponse
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_file:
+                temp_file.write(markdown_content)
+                temp_path = temp_file.name
+
             return FileResponse(
-                path=full_path,
+                path=temp_path,
                 media_type="text/markdown",
-                filename=filename
+                filename=filename,
+                background=lambda: os.unlink(temp_path) if os.path.exists(temp_path) else None
             )
         else:
             # Convert to beautiful HTML
@@ -614,21 +633,38 @@ async def get_viz_data(
         if not analysis:
             raise HTTPException(status_code=404, detail="Analysis not found")
 
-        # Construct path to viz_data.json
-        # Format: data/outputs/analyses/{company_id}/{analysis_id}/viz_data.json
-        viz_data_path = os.path.join(
-            "data", "outputs", "analyses",
-            analysis.company_id, analysis_id, "viz_data.json"
-        )
+        # Try to get viz_data_path from analysis state (if stored)
+        # For backward compatibility, construct path if not in database
+        viz_data_path = None
 
-        if not os.path.exists(viz_data_path):
+        # Check if analysis has viz_data_path stored (new GCS approach)
+        if hasattr(analysis, 'viz_data_path') and analysis.viz_data_path:
+            viz_data_path = analysis.viz_data_path
+        else:
+            # Backward compatibility: construct old local path
+            viz_data_path = os.path.join(
+                "analyses", analysis.company_id, analysis_id, "viz_data.json"
+            )
+
+        # Get content from storage
+        try:
+            json_bytes = get_file_content(viz_data_path, as_string=False)
+            print(f"[API] Viz data loaded successfully from storage")
+
+            # Create temp file to return as FileResponse
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.json', delete=False) as temp_file:
+                temp_file.write(json_bytes)
+                temp_path = temp_file.name
+
+            return FileResponse(
+                path=temp_path,
+                media_type="application/json",
+                filename=f"viz_data_{analysis_id[:8]}.json",
+                background=lambda: os.unlink(temp_path) if os.path.exists(temp_path) else None
+            )
+        except Exception as e:
+            print(f"[API] Failed to load viz data: {e}")
             raise HTTPException(status_code=404, detail="Visualization data not found")
-
-        return FileResponse(
-            path=viz_data_path,
-            media_type="application/json",
-            filename=f"viz_data_{analysis_id[:8]}.json"
-        )
 
     except HTTPException:
         raise
@@ -656,20 +692,56 @@ async def delete_analysis(
         if not analysis:
             raise HTTPException(status_code=404, detail="Analysis not found")
 
-        # Delete the entire analysis directory
-        # Structure: data/outputs/analyses/{company_id}/{analysis_id}/
+        # Delete files from storage (GCS in production, local in development)
+        storage_service = StorageService()
+        storage_type = "GCS" if storage_service.use_gcs else "local storage"
+
+        try:
+            # Delete analysis files from storage
+            files_deleted = []
+
+            # Delete report
+            if analysis.report_path:
+                try:
+                    storage_service.delete_file(analysis.report_path)
+                    files_deleted.append(analysis.report_path)
+                    print(f"[DELETE] Deleted report from {storage_type}: {analysis.report_path}")
+                except Exception as e:
+                    print(f"[DELETE WARN] Failed to delete report: {e}")
+
+            # Delete dashboard
+            if analysis.dashboard_path:
+                try:
+                    storage_service.delete_file(analysis.dashboard_path)
+                    files_deleted.append(analysis.dashboard_path)
+                    print(f"[DELETE] Deleted dashboard from {storage_type}: {analysis.dashboard_path}")
+                except Exception as e:
+                    print(f"[DELETE WARN] Failed to delete dashboard: {e}")
+
+            # Delete viz_data if stored
+            if hasattr(analysis, 'viz_data_path') and analysis.viz_data_path:
+                try:
+                    storage_service.delete_file(analysis.viz_data_path)
+                    files_deleted.append(analysis.viz_data_path)
+                    print(f"[DELETE] Deleted viz_data from {storage_type}: {analysis.viz_data_path}")
+                except Exception as e:
+                    print(f"[DELETE WARN] Failed to delete viz_data: {e}")
+
+            print(f"[DELETE] Deleted {len(files_deleted)} files from {storage_type}")
+        except Exception as e:
+            print(f"[DELETE ERROR] Failed to delete analysis files from {storage_type}: {e}")
+
+        # Also delete old local directory if it exists (backward compatibility)
         analysis_dir = os.path.join(
             "data", "outputs", "analyses",
             analysis.company_id, analysis_id
         )
-
         if os.path.exists(analysis_dir):
             try:
                 shutil.rmtree(analysis_dir)
-                print(f"[DELETE] Removed analysis directory: {analysis_dir}")
+                print(f"[DELETE] Removed old local directory: {analysis_dir}")
             except Exception as e:
-                print(f"[DELETE ERROR] Failed to remove directory {analysis_dir}: {e}")
-                # Continue with database deletion even if file deletion fails
+                print(f"[DELETE WARN] Failed to remove old directory {analysis_dir}: {e}")
 
         # Delete database record
         AnalysisSessionRepository.delete(
@@ -680,7 +752,8 @@ async def delete_analysis(
         return {
             "success": True,
             "message": "Analysis deleted successfully",
-            "directory_deleted": analysis_dir if os.path.exists(analysis_dir) else None
+            "storage_type": storage_type,
+            "files_deleted": len(files_deleted) if 'files_deleted' in locals() else 0
         }
 
     except HTTPException:

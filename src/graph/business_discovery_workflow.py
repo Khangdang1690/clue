@@ -26,6 +26,13 @@ except ImportError:
     # Fallback if not available
     AnalysisMessageService = None
 
+# Import storage service for GCS uploads
+try:
+    from app.services.storage_service import StorageService
+except ImportError:
+    # Fallback if not available (e.g., during testing)
+    StorageService = None
+
 
 class BusinessDiscoveryState(Dict):
     """State for business discovery workflow."""
@@ -1038,6 +1045,7 @@ Return your response as a JSON array:
         print(f"  [OK] Relative path: {report_relative_path}")
 
         # Generate Plotly dashboard if viz_data was created
+        dashboard_full_path = None
         if state.get('viz_data_path') and self.viz_data_store:
             try:
                 # Specify output path in company-specific directory
@@ -1057,6 +1065,38 @@ Return your response as a JSON array:
                 print(f"  [OK] Relative path: {dashboard_relative_path}")
             except Exception as e:
                 print(f"  [WARN] Dashboard generation failed: {e}")
+
+        # Upload all outputs to storage (GCS in production, local in development)
+        if StorageService:
+            try:
+                storage_service = StorageService()
+                storage_type = "Google Cloud Storage" if storage_service.use_gcs else "local storage"
+                print(f"\n  [STORAGE] Uploading analysis outputs to {storage_type}...")
+
+                # Get local file paths
+                viz_data_full_path = state.get('viz_data_path')  # Already has full path
+
+                # Upload files to storage
+                storage_paths = storage_service.upload_analysis_outputs(
+                    company_id=company_id,
+                    analysis_id=analysis_id,
+                    report_local_path=report_full_path,
+                    dashboard_local_path=dashboard_full_path,
+                    viz_data_local_path=viz_data_full_path
+                )
+
+                # Update state with storage paths (overwrite local paths)
+                if 'report_path' in storage_paths:
+                    state['report_path'] = storage_paths['report_path']
+                if 'dashboard_path' in storage_paths:
+                    state['dashboard_path'] = storage_paths['dashboard_path']
+                if 'viz_data_path' in storage_paths:
+                    state['viz_data_path'] = storage_paths['viz_data_path']
+
+                print(f"  [STORAGE] Upload complete to {storage_type}")
+            except Exception as e:
+                print(f"  [WARN] Storage upload failed (using local paths): {e}")
+                # Keep local paths in state if storage upload fails
 
         # Emit progress: completed
         self._emit_message(
