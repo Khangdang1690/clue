@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     build-essential \
     libpq-dev \
+    libmagic1 \
+    libmagic-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -33,6 +35,7 @@ WORKDIR /app
 # Install runtime dependencies only (much smaller than build deps)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder stage
@@ -52,10 +55,6 @@ USER appuser
 # Expose port (Cloud Run will use PORT environment variable)
 ENV PORT=8000
 EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Set Python to run in unbuffered mode (better for Cloud Run logs)
 ENV PYTHONUNBUFFERED=1

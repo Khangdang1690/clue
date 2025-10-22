@@ -47,7 +47,7 @@ pgvector>=0.2.0        # Vector similarity search
 # ============================================================================
 
 # File type detection and encoding
-python-magic-bin>=0.4.14  # Windows compatible version
+python-magic>=0.4.27   # File type detection (Linux: requires libmagic1)
 chardet>=5.2.0         # Encoding detection
 
 # Embeddings
