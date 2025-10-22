@@ -11,6 +11,7 @@ from app.api.deps import get_db
 from app.core.config import get_settings
 from app.services.etl_service import ETLService
 from app.services.company_service import CompanyService
+from app.services.etl_message_service import ETLJobTracker
 from app.schemas.etl import DatasetResponse
 from src.database.repository import DatasetRepository
 
@@ -37,9 +38,10 @@ async def upload_files(
     db: Session = Depends(get_db)
 ):
     """
-    Upload and process CSV/Excel files through ETL workflow.
+    Upload and process CSV/Excel files through ETL workflow (NEW: Fire-and-Forget Pattern).
 
-    Streams progress updates via Server-Sent Events (SSE).
+    Returns job_id immediately, client should then connect to /etl/{job_id}/stream
+    to receive progress updates via NDJSON streaming.
 
     Args:
         files: List of files to upload
@@ -47,18 +49,22 @@ async def upload_files(
         user_id: User ID from authorization header
         db: Database session
 
-    The client should listen for SSE events with the following formats:
-    ```
-    # Normal progress
-    data: {"step": "processing_file", "progress": 50, "message": "Processing file...", "status": "running"}
+    Returns:
+        {"job_id": "uuid", "status": "started"}
 
-    # Duplicate detected (pauses upload, waits for user choice)
-    data: {"step": "duplicate_detected", "status": "duplicate_detected", "options": ["skip", "replace", "append_anyway"], ...}
-
-    # Completed
-    data: {"step": "completed", "progress": 100, "status": "completed", "data": {...}}
-    ```
+    Client workflow:
+        1. POST /api/etl/upload → Get job_id
+        2. GET /api/etl/{job_id}/stream → Stream progress (NDJSON)
+        3. (Optional) GET /api/etl/{job_id}/status → Poll status if streaming fails
     """
+    print("\n" + "="*80)
+    print("[ETL-UPLOAD] POST /api/etl/upload received")
+    print(f"[ETL-UPLOAD] User ID: {user_id}")
+    print(f"[ETL-UPLOAD] Number of files: {len(files)}")
+    print(f"[ETL-UPLOAD] File names: {[f.filename for f in files]}")
+    print(f"[ETL-UPLOAD] Force actions: {force_actions}")
+    print("="*80 + "\n")
+
     # Validate files
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
@@ -118,34 +124,104 @@ async def upload_files(
             if file_name in force_actions_dict:
                 force_actions_by_filename[file_name] = force_actions_dict[file_name]
 
-        # Stream ETL progress
-        async def event_stream():
-            try:
-                async for progress_update in ETLService.process_files_with_progress(
-                    company_id=company.id,
-                    file_paths=file_paths,
-                    force_actions=force_actions_by_filename
-                ):
-                    yield progress_update
-            finally:
-                # Cleanup temp files after streaming completes
-                ETLService.cleanup_temp_files(file_paths)
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"  # Disable buffering for nginx
-            }
+        # Start ETL job (fire-and-forget - returns immediately)
+        job_id = await ETLService.start_etl_job(
+            company_id=company.id,
+            file_paths=file_paths,
+            force_actions=force_actions_by_filename
         )
+
+        print(f"\n[ETL-UPLOAD] Job created successfully: {job_id}")
+        print(f"[ETL-UPLOAD] Returning response: {{'job_id': '{job_id}', 'status': 'started'}}")
+        print(f"[ETL-UPLOAD] Client should now connect to: /api/etl/{job_id}/stream\n")
+
+        return {"job_id": job_id, "status": "started"}
 
     except Exception as e:
         # Cleanup on error
         if 'file_paths' in locals():
             ETLService.cleanup_temp_files(file_paths)
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.get("/{job_id}/stream")
+async def stream_etl_progress(
+    job_id: str,
+    user_id: str = Depends(get_user_id_from_header)
+):
+    """
+    Stream ETL progress messages via NDJSON (newline-delimited JSON).
+
+    Similar to analysis streaming, provides real-time narrative updates.
+
+    Args:
+        job_id: Job identifier from POST /upload
+        user_id: User ID from authorization header
+
+    Returns:
+        StreamingResponse with NDJSON format
+
+    Message types:
+        - message: {"type": "message", "message_type": "info|success|error", "content": "Loading files..."}
+        - complete: {"type": "complete", "data": {...}}
+        - error: {"type": "error", "error": "..."}
+        - keepalive: {"type": "keepalive"}
+    """
+    print("\n" + "="*80)
+    print(f"[ETL-STREAM] GET /api/etl/{job_id}/stream received")
+    print(f"[ETL-STREAM] User ID: {user_id}")
+    print("="*80 + "\n")
+
+    # Verify job exists
+    job = ETLJobTracker.get_job(job_id)
+    if not job:
+        print(f"[ETL-STREAM ERROR] Job {job_id} not found!")
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    print(f"[ETL-STREAM] Job found: {job['status']}")
+    print(f"[ETL-STREAM] Starting stream response...\n")
+
+    return StreamingResponse(
+        ETLService.stream_etl_messages(job_id),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable buffering for nginx
+        }
+    )
+
+
+@router.get("/{job_id}/status")
+async def get_etl_status(
+    job_id: str,
+    user_id: str = Depends(get_user_id_from_header)
+):
+    """
+    Get ETL job status (polling fallback if streaming fails).
+
+    Args:
+        job_id: Job identifier
+        user_id: User ID from authorization header
+
+    Returns:
+        {
+            "job_id": "uuid",
+            "status": "running|completed|error|duplicates_detected",
+            "progress": 50,
+            "message": "Processing...",
+            "step": "semantic_analysis",
+            "created_at": "ISO timestamp",
+            "completed_at": "ISO timestamp|null",
+            "error": "error message|null",
+            "data": {...}  # Result data on completion
+        }
+    """
+    job = ETLJobTracker.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job
 
 
 @router.get("/datasets", response_model=List[DatasetResponse])

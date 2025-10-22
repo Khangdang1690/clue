@@ -146,9 +146,34 @@ class KPICalculator:
         ]
     }
 
-    def __init__(self):
-        self.llm = get_llm(temperature=0.0, model="gemini-2.5-flash")
-        self.embedding_service = get_embedding_service()
+    def __init__(self, enable_custom_suggestions: bool = False, enable_embeddings: bool = False):
+        """
+        Initialize KPI Calculator with performance optimization flags.
+
+        Args:
+            enable_custom_suggestions: Enable LLM-based custom KPI suggestions (SLOW - adds ~2-5s per dataset)
+            enable_embeddings: Enable KPI embedding creation (SLOW - adds ~1-3s per KPI)
+        """
+        self.enable_custom_suggestions = enable_custom_suggestions
+        self.enable_embeddings = enable_embeddings
+
+        # Lazy initialization - only create if needed
+        self._llm = None
+        self._embedding_service = None
+
+    @property
+    def llm(self):
+        """Lazy load LLM only when needed."""
+        if self._llm is None and self.enable_custom_suggestions:
+            self._llm = get_llm(temperature=0.0, model="gemini-2.5-flash")
+        return self._llm
+
+    @property
+    def embedding_service(self):
+        """Lazy load embedding service only when needed."""
+        if self._embedding_service is None and self.enable_embeddings:
+            self._embedding_service = get_embedding_service()
+        return self._embedding_service
 
     def identify_kpis(
         self,
@@ -169,7 +194,7 @@ class KPICalculator:
         """
         applicable_kpis = []
 
-        # 1. Check pre-defined KPIs
+        # 1. Check pre-defined KPIs (FAST - no API calls)
         domain_kpis = self.KPI_LIBRARY.get(domain, [])
 
         for kpi in domain_kpis:
@@ -186,9 +211,13 @@ class KPICalculator:
                 applicable_kpis.append(kpi_copy)
                 print(f"[KPI] Found applicable: {kpi['name']}")
 
-        # 2. Use LLM to suggest custom KPIs
-        custom_kpis = self._suggest_custom_kpis(df, domain, column_semantics)
-        applicable_kpis.extend(custom_kpis)
+        # 2. OPTIONAL: Use LLM to suggest custom KPIs (disabled by default for performance)
+        if self.enable_custom_suggestions:
+            print(f"[KPI] Requesting custom KPI suggestions from LLM (may take 2-5 seconds)...")
+            custom_kpis = self._suggest_custom_kpis(df, domain, column_semantics)
+            applicable_kpis.extend(custom_kpis)
+        else:
+            print(f"[KPI] Custom KPI suggestions disabled (performance optimization)")
 
         return applicable_kpis
 
@@ -432,12 +461,15 @@ Suggest custom KPIs:""")
 
         for kpi_def in kpi_definitions:
             try:
-                # Create embedding for KPI
-                embedding = self.embedding_service.create_kpi_embedding(
-                    kpi_def['name'],
-                    kpi_def.get('description', ''),
-                    domain
-                )
+                # OPTIMIZATION: Skip embedding creation if disabled (saves 1-3s per KPI)
+                embedding = None
+                if self.enable_embeddings and self.embedding_service:
+                    print(f"[KPI] Creating embedding for {kpi_def['name']}...")
+                    embedding = self.embedding_service.create_kpi_embedding(
+                        kpi_def['name'],
+                        kpi_def.get('description', ''),
+                        domain
+                    )
 
                 kpi = KPIDefinition(
                     kpi_name=kpi_def['name'],
@@ -446,7 +478,7 @@ Suggest custom KPIs:""")
                     formula=kpi_def.get('formula', ''),
                     unit=kpi_def.get('unit', ''),
                     required_columns=kpi_def.get('required_columns', []),
-                    kpi_embedding=embedding
+                    kpi_embedding=embedding  # Will be None if embeddings disabled
                 )
 
                 session.add(kpi)

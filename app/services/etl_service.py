@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import uuid
 from typing import AsyncGenerator, List, Optional, Dict, Any
 from pathlib import Path
 import json
@@ -11,6 +12,7 @@ from src.etl.dataset_manager import DatasetManager, UploadResult
 from src.graph.etl_workflow import ETLWorkflow
 from src.database.connection import DatabaseManager
 from app.services.storage_service import StorageService
+from app.services.etl_message_service import ETLMessageService, ETLJobTracker
 
 
 class ETLService:
@@ -339,6 +341,305 @@ class ETLService:
     def _format_sse(data: dict) -> str:
         """Format data as Server-Sent Event."""
         return f"data: {json.dumps(data)}\n\n"
+
+    # ========================================================================
+    # NEW: Fire-and-Forget Pattern with NDJSON Streaming
+    # ========================================================================
+
+    @staticmethod
+    async def start_etl_job(
+        company_id: int,
+        file_paths: List[str],
+        force_actions: Optional[Dict[str, str]] = None
+    ) -> str:
+        """
+        Start ETL job and return job_id immediately (fire-and-forget pattern).
+
+        Args:
+            company_id: Company ID
+            file_paths: List of file paths to process
+            force_actions: Optional dict mapping filename to action
+
+        Returns:
+            job_id: Unique identifier for tracking this ETL job
+        """
+        job_id = str(uuid.uuid4())
+        file_names = [os.path.basename(f) for f in file_paths]
+
+        # Track job
+        ETLJobTracker.create_job(job_id, company_id, len(file_paths), file_names)
+
+        # Run ETL in background (don't await)
+        asyncio.create_task(
+            ETLService._run_etl_background(job_id, company_id, file_paths, force_actions or {})
+        )
+
+        print(f"[ETL-SERVICE] Started job {job_id} for {len(file_paths)} file(s)")
+        return job_id
+
+    @staticmethod
+    async def _run_etl_background(
+        job_id: str,
+        company_id: int,
+        file_paths: List[str],
+        force_actions: Dict[str, str]
+    ) -> None:
+        """
+        Background ETL execution with message broadcasting.
+
+        This method runs the complete ETL workflow and emits progress updates
+        via ETLMessageService for clients to stream.
+
+        Args:
+            job_id: Job identifier
+            company_id: Company ID
+            file_paths: Files to process
+            force_actions: User actions for duplicate files
+        """
+        manager = DatasetManager()
+        processed_results = []
+
+        try:
+            # CRITICAL: Wait 1 second for frontend to connect to stream
+            # This prevents race condition where messages are sent before client connects
+            print(f"[ETL-BACKGROUND] Waiting 1s for client to connect to stream...")
+            await asyncio.sleep(1.0)
+
+            # Initial message
+            await ETLMessageService.emit_message(job_id, "Starting upload...", "info")
+            ETLJobTracker.update_job(job_id, message="Starting upload...")
+
+            # Phase 1: Duplicate scan
+            await ETLMessageService.emit_message(
+                job_id, f"Scanning {len(file_paths)} file(s) for duplicates...", "info"
+            )
+            ETLJobTracker.update_job(job_id, message="Scanning for duplicates...")
+
+            await asyncio.sleep(0.1)
+
+            duplicates_found = {}
+            for file_path in file_paths:
+                file_name = os.path.basename(file_path)
+                if file_name in force_actions:
+                    continue
+
+                dup_info = manager.quick_duplicate_check(company_id, file_path)
+                if dup_info:
+                    duplicates_found[file_name] = {
+                        "file_path": file_path,
+                        "dataset_id": dup_info["dataset_id"],
+                        "dataset_name": dup_info["dataset_name"],
+                        "overlap_percentage": dup_info["overlap_percentage"],
+                        "new_rows": dup_info["new_rows"]
+                    }
+
+            # If duplicates found, emit error and pause
+            if duplicates_found:
+                await ETLMessageService.emit_error(
+                    job_id,
+                    f"Found {len(duplicates_found)} duplicate file(s). Please resolve duplicates and try again."
+                )
+                ETLJobTracker.update_job(
+                    job_id,
+                    status='duplicates_detected',
+                    message=f"Found {len(duplicates_found)} duplicate file(s)"
+                )
+                return  # Stop and wait for user resolution
+
+            # Phase 2: Process files
+            clean_files = []
+            datasets_to_delete = []
+
+            # Handle force actions (same logic as original)
+            import pandas as pd
+            for file_path in file_paths:
+                file_name = os.path.basename(file_path)
+                action = force_actions.get(file_name)
+
+                if action == "skip":
+                    continue
+                elif action == "replace":
+                    dup_info = manager.quick_duplicate_check(company_id, file_path)
+                    if dup_info:
+                        datasets_to_delete.append({
+                            "dataset_id": dup_info["dataset_id"],
+                            "dataset_name": dup_info["dataset_name"],
+                            "reason": "replace"
+                        })
+                    clean_files.append(file_path)
+                elif action == "append_anyway":
+                    dup_info = manager.quick_duplicate_check(company_id, file_path)
+                    if dup_info:
+                        with DatabaseManager.get_session() as session:
+                            from src.database.repository import DatasetRepository
+                            old_df = DatasetRepository.load_dataframe(session, dup_info["dataset_id"])
+
+                        new_df = pd.read_csv(file_path)
+                        combined_df = pd.concat([old_df, new_df], ignore_index=True)
+                        combined_df = combined_df.drop_duplicates()
+                        combined_df.to_csv(file_path, index=False)
+
+                        datasets_to_delete.append({
+                            "dataset_id": dup_info["dataset_id"],
+                            "dataset_name": dup_info["dataset_name"],
+                            "reason": "append"
+                        })
+                    clean_files.append(file_path)
+                else:
+                    clean_files.append(file_path)
+
+            # Delete old datasets if needed
+            if datasets_to_delete:
+                await ETLMessageService.emit_message(
+                    job_id, f"Removing {len(datasets_to_delete)} old dataset(s)...", "info"
+                )
+                ETLJobTracker.update_job(job_id, message="Removing old datasets...")
+
+                for ds_info in datasets_to_delete:
+                    manager.delete_dataset(
+                        dataset_id=ds_info["dataset_id"],
+                        cascade=True,
+                        confirm=True
+                    )
+
+            # Process clean files with ETL workflow
+            if clean_files:
+                await ETLMessageService.emit_message(
+                    job_id, f"Processing {len(clean_files)} file(s)...", "info"
+                )
+                ETLJobTracker.update_job(job_id, message=f"Processing {len(clean_files)} file(s)...")
+
+                workflow = ETLWorkflow(company_id=str(company_id))
+
+                # Define progress messages (no percentages)
+                progress_messages = [
+                    "Loading files...",
+                    "Analyzing data semantics...",
+                    "Detecting relationships between datasets...",
+                    "Cleaning and validating data...",
+                    "Calculating key performance indicators...",
+                    "Storing to database..."
+                ]
+
+                # Start ETL in background
+                etl_task = asyncio.create_task(
+                    asyncio.to_thread(workflow.run_etl, file_paths=clean_files, mode='create')
+                )
+
+                # Emit messages as ETL progresses
+                for i, message in enumerate(progress_messages):
+                    await ETLMessageService.emit_message(job_id, message, "info")
+                    ETLJobTracker.update_job(job_id, message=message)
+                    await asyncio.sleep(0.1)
+
+                    if etl_task.done():
+                        try:
+                            await etl_task
+                        except Exception as e:
+                            etl_result = {"status": "error", "error_message": str(e)}
+                            break
+                        break
+
+                    # Wait between updates
+                    if i < len(progress_messages) - 1:
+                        wait_time = 45
+                        elapsed = 0
+                        while elapsed < wait_time and not etl_task.done():
+                            await asyncio.sleep(5)
+                            elapsed += 5
+
+                # Wait for ETL completion
+                if not etl_task.done():
+                    etl_result = await etl_task
+                elif 'etl_result' not in locals():
+                    etl_result = await etl_task
+
+                if etl_result.get('status') != 'completed':
+                    raise Exception(etl_result.get('error_message', 'Unknown error'))
+
+                # Build result data
+                for file_id, dataset_id in etl_result.get('dataset_ids', {}).items():
+                    meta = etl_result.get('semantic_metadata', {}).get(file_id, {})
+                    processed_results.append(UploadResult(
+                        status="created",
+                        dataset_id=dataset_id,
+                        dataset_name=meta.get('table_name', 'unknown'),
+                        message=f"Created {meta.get('table_name', 'unknown')}"
+                    ))
+
+            # Success - emit completion
+            result_data = {
+                "company_id": company_id,
+                "total_files": len(file_paths),
+                "processed_files": len(processed_results),
+                "results": [
+                    {
+                        "dataset_id": r.dataset_id,
+                        "dataset_name": r.dataset_name,
+                        "status": r.status,
+                        "metadata": r.metadata
+                    }
+                    for r in processed_results
+                ]
+            }
+
+            await ETLMessageService.emit_complete(job_id, result_data)
+            ETLJobTracker.update_job(
+                job_id,
+                status='completed',
+                message=f"Successfully processed {len(processed_results)} file(s)",
+                data=result_data
+            )
+
+            # Cleanup temp files
+            ETLService.cleanup_temp_files(file_paths)
+
+        except Exception as e:
+            error_msg = str(e)
+            await ETLMessageService.emit_error(job_id, error_msg)
+            ETLJobTracker.update_job(
+                job_id,
+                status='error',
+                error=error_msg,
+                message=f"ETL failed: {error_msg}"
+            )
+
+            # Cleanup on error
+            ETLService.cleanup_temp_files(file_paths)
+
+    @staticmethod
+    async def stream_etl_messages(job_id: str):
+        """
+        Stream NDJSON messages for an ETL job.
+
+        Yields:
+            NDJSON formatted messages (one JSON object per line)
+
+        Message types:
+            - message: {"type": "message", "message_type": "info|success|error", "content": "..."}
+            - complete: {"type": "complete", "data": {...}}
+            - error: {"type": "error", "error": "..."}
+            - keepalive: {"type": "keepalive"}
+        """
+        queue = await ETLMessageService.register_client(job_id)
+
+        try:
+            while True:
+                try:
+                    # Wait for message with 15-second timeout
+                    message = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield json.dumps(message) + '\n'
+
+                    # Stop streaming on terminal events
+                    if message.get('type') in ['complete', 'error']:
+                        break
+
+                except asyncio.TimeoutError:
+                    # Send keepalive ping to prevent connection timeout
+                    yield json.dumps({'type': 'keepalive'}) + '\n'
+
+        finally:
+            await ETLMessageService.unregister_client(job_id, queue)
 
     @staticmethod
     async def save_uploaded_files(files, company_id: int) -> List[str]:

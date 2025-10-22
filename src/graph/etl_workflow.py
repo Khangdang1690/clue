@@ -40,7 +40,13 @@ class ETLWorkflow:
         self.semantic_analyzer = SemanticAnalyzer()
         self.relationship_detector = RelationshipDetector(confidence_threshold=0.8)
         self.adaptive_cleaner = AdaptiveCleaner()
-        self.kpi_calculator = KPICalculator()
+        # PERFORMANCE: Disable slow LLM suggestions and embedding creation by default
+        # Pre-defined KPIs still work (Finance, Sales, Marketing, HR, Operations)
+        # Enable these flags only if you need custom KPIs or KPI embeddings for search
+        self.kpi_calculator = KPICalculator(
+            enable_custom_suggestions=False,  # Saves ~2-5s per dataset
+            enable_embeddings=False  # Saves ~1-3s per KPI
+        )
 
         # Build workflow
         self.graph = self._build_graph()
@@ -539,6 +545,11 @@ class ETLWorkflow:
 
                     print(f"  Storing {semantic_meta['table_name']}...")
 
+                    # Generate storage path (not temp path) for the dataset record
+                    # This is the permanent storage location (GCS or local storage)
+                    from app.services.storage_service import StorageService
+                    storage_path = StorageService.get_gcs_path(company_id, file_meta['file_name'])
+
                     # Create dataset record with embeddings and unified context
                     dataset = DatasetRepository.create_dataset(
                         session=session,
@@ -546,7 +557,7 @@ class ETLWorkflow:
                         original_filename=file_meta['file_name'],
                         table_name=semantic_meta['table_name'],
                         file_type=file_meta['file_type'],
-                        file_path=file_meta['file_path'],
+                        file_path=storage_path,  # Store permanent storage path, not temp path
                         domain=semantic_meta.get('domain'),
                         department=semantic_meta.get('department'),
                         description=semantic_meta.get('description'),
@@ -560,28 +571,30 @@ class ETLWorkflow:
                         business_context=semantic_meta.get('business_context')
                     )
 
-                    # Store column metadata with embeddings
+                    # Store column metadata with embeddings (BULK INSERT for performance)
                     column_semantics = semantic_meta.get('column_semantics', {})
+                    columns_data = []
                     for i, col_name in enumerate(df.columns):
                         col_meta = column_semantics.get(col_name, {})
+                        columns_data.append({
+                            'dataset_id': dataset.id,
+                            'column_name': col_name,
+                            'original_name': col_name,
+                            'position': i,
+                            'data_type': str(df[col_name].dtype),
+                            'semantic_type': col_meta.get('semantic_type'),
+                            'business_meaning': col_meta.get('business_meaning'),
+                            'is_primary_key': col_meta.get('is_primary_key', False),
+                            'is_foreign_key': col_meta.get('is_foreign_key', False),
+                            'semantic_embedding': col_meta.get('semantic_embedding'),
+                            'null_count': col_meta.get('null_count'),
+                            'null_percentage': col_meta.get('null_percentage'),
+                            'unique_count': col_meta.get('unique_count'),
+                            'unique_percentage': col_meta.get('unique_percentage')
+                        })
 
-                        ColumnMetadataRepository.create_column_metadata(
-                            session=session,
-                            dataset_id=dataset.id,
-                            column_name=col_name,
-                            original_name=col_name,
-                            position=i,
-                            data_type=str(df[col_name].dtype),
-                            semantic_type=col_meta.get('semantic_type'),
-                            business_meaning=col_meta.get('business_meaning'),
-                            is_primary_key=col_meta.get('is_primary_key', False),
-                            is_foreign_key=col_meta.get('is_foreign_key', False),
-                            semantic_embedding=col_meta.get('semantic_embedding'),
-                            null_count=col_meta.get('null_count'),
-                            null_percentage=col_meta.get('null_percentage'),
-                            unique_count=col_meta.get('unique_count'),
-                            unique_percentage=col_meta.get('unique_percentage')
-                        )
+                    # Bulk insert all columns at once (much faster than individual inserts)
+                    ColumnMetadataRepository.bulk_create_column_metadata(session, columns_data)
 
                     # Store DataFrame to PostgreSQL
                     table_name = DatasetRepository.store_dataframe(
@@ -612,10 +625,11 @@ class ETLWorkflow:
 
                     print(f"    Stored as {table_name}: {len(df):,} rows × {len(df.columns)} columns")
 
-                # Store relationships
+                # Store relationships (BULK INSERT for performance)
                 print(f"  Storing {len(state['relationships'])} relationships...")
                 print(f"    Dataset ID mapping: {list(state['dataset_ids'].keys())}")
 
+                relationships_data = []
                 for i, rel in enumerate(state['relationships']):
                     # The relationships use file IDs (e.g., 'file_0'), not dataset IDs
                     from_file_id = rel['from_dataset_id']
@@ -631,20 +645,24 @@ class ETLWorkflow:
                         confidence = float(rel['confidence'])
                         match_pct = float(rel.get('match_percentage', 0))
 
-                        RelationshipRepository.create_relationship(
-                            session=session,
-                            from_dataset_id=from_dataset_id,
-                            to_dataset_id=to_dataset_id,
-                            from_column=rel['from_column'],
-                            to_column=rel['to_column'],
-                            relationship_type=rel['relationship_type'],
-                            confidence=confidence,
-                            match_percentage=match_pct,
-                            join_strategy=rel.get('join_strategy', 'left')
-                        )
-                        print(f"    Saved: {rel['from_column']} -> {rel['to_column']} (conf: {confidence:.2f})")
+                        relationships_data.append({
+                            'from_dataset_id': from_dataset_id,
+                            'to_dataset_id': to_dataset_id,
+                            'from_column': rel['from_column'],
+                            'to_column': rel['to_column'],
+                            'relationship_type': rel['relationship_type'],
+                            'confidence': confidence,
+                            'match_percentage': match_pct,
+                            'join_strategy': rel.get('join_strategy', 'left')
+                        })
+                        print(f"    Queued: {rel['from_column']} -> {rel['to_column']} (conf: {confidence:.2f})")
                     else:
                         print(f"    Skipped relationship: from_id={from_file_id} ({from_dataset_id}), to_id={to_file_id} ({to_dataset_id})")
+
+                # Bulk insert all relationships at once (much faster than individual inserts)
+                if relationships_data:
+                    RelationshipRepository.bulk_create_relationships(session, relationships_data)
+                    print(f"    Bulk inserted {len(relationships_data)} relationships")
 
             state['status'] = 'completed'
             print("[OK] All data stored successfully")

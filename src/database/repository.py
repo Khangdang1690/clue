@@ -9,6 +9,7 @@ from src.database.models import (
 )
 import pandas as pd
 from datetime import datetime
+from app.services.storage_service import StorageService
 
 
 class CompanyRepository:
@@ -231,6 +232,7 @@ class DatasetRepository:
     def delete_dataset(session: Session, dataset_id: str) -> bool:
         """
         Delete dataset with full cascade:
+        - File from storage (GCS or local filesystem)
         - Table relationships (from/to)
         - Analysis sessions containing this dataset
         - Actual data table (cleaned_xxx)
@@ -249,7 +251,44 @@ class DatasetRepository:
 
         print(f"[DELETE] Deleting dataset: {dataset.table_name} (ID: {dataset_id})")
 
-        # 1. Delete relationships (both from and to)
+        # 1. Delete file from storage
+        try:
+            storage_service = StorageService()
+            print(f"  [DEBUG] Storage type: {'GCS' if storage_service.use_gcs else 'local'}")
+            print(f"  [DEBUG] Local storage root: {storage_service.local_storage_root}")
+            print(f"  [DEBUG] Dataset file_path: {dataset.file_path}")
+
+            if dataset.file_path:
+                file_exists = storage_service.file_exists(dataset.file_path)
+                print(f"  [DEBUG] File exists check: {file_exists}")
+
+                if file_exists:
+                    # Get full local path for debugging
+                    if not storage_service.use_gcs:
+                        import os
+                        full_path = os.path.join(storage_service.local_storage_root, dataset.file_path)
+                        print(f"  [DEBUG] Full local path: {full_path}")
+
+                    storage_service.delete_file(dataset.file_path)
+                    storage_type = "GCS" if storage_service.use_gcs else "local storage"
+                    print(f"  ✓ Deleted file from {storage_type}: {dataset.file_path}")
+
+                    # Verify deletion
+                    still_exists = storage_service.file_exists(dataset.file_path)
+                    if still_exists:
+                        print(f"  ⚠ WARNING: File still exists after deletion!")
+                    else:
+                        print(f"  ✓ Verified: File successfully removed from {storage_type}")
+                else:
+                    print(f"  File not found in storage: {dataset.file_path}")
+            else:
+                print(f"  No file_path set for this dataset")
+        except Exception as e:
+            print(f"  ⚠ ERROR: Could not delete file from storage: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # 2. Delete relationships (both from and to)
         from_rels = session.query(TableRelationship).filter(
             TableRelationship.from_dataset_id == dataset_id
         ).all()
@@ -261,7 +300,7 @@ class DatasetRepository:
             session.delete(rel)
         print(f"  Deleted {len(from_rels) + len(to_rels)} relationships")
 
-        # 2. Delete or update analysis sessions containing this dataset
+        # 3. Delete or update analysis sessions containing this dataset
         sessions_with_dataset = session.query(AnalysisSession).all()
         sessions_deleted = 0
         sessions_updated = 0
@@ -283,7 +322,7 @@ class DatasetRepository:
         if sessions_updated > 0:
             print(f"  Updated {sessions_updated} analysis sessions (removed dataset reference)")
 
-        # 3. Drop actual data table
+        # 4. Drop actual data table
         try:
             company = session.query(Company).filter(Company.id == dataset.company_id).first()
             table_name = f"{company.name}_cleaned_{dataset.table_name}"
@@ -294,7 +333,7 @@ class DatasetRepository:
         except Exception as e:
             print(f"  Warning: Could not drop data table: {e}")
 
-        # 4. Delete dataset record (cascades to column metadata automatically)
+        # 5. Delete dataset record (cascades to column metadata automatically)
         session.delete(dataset)
         print(f"  Deleted dataset record and column metadata")
 
@@ -345,6 +384,30 @@ class ColumnMetadataRepository:
         return column_meta
 
     @staticmethod
+    def bulk_create_column_metadata(
+        session: Session,
+        columns_data: List[Dict[str, Any]]
+    ) -> None:
+        """
+        Bulk insert column metadata for better performance.
+
+        Args:
+            session: Database session
+            columns_data: List of dictionaries containing column metadata
+                Each dict should have keys: dataset_id, column_name, original_name,
+                position, data_type, and optional semantic fields
+
+        Performance: Reduces N individual INSERTs to 1 bulk INSERT.
+        Example: 50 columns = 50 roundtrips → 1 roundtrip (50x faster)
+        """
+        if not columns_data:
+            return
+
+        # Use bulk_insert_mappings for optimal performance
+        session.bulk_insert_mappings(ColumnMetadata, columns_data)
+        session.flush()
+
+    @staticmethod
     def get_columns_by_dataset(session: Session, dataset_id: str) -> List[ColumnMetadata]:
         """Get all columns for a dataset."""
         return session.query(ColumnMetadata).filter(
@@ -381,6 +444,30 @@ class RelationshipRepository:
         session.add(rel)
         session.flush()
         return rel
+
+    @staticmethod
+    def bulk_create_relationships(
+        session: Session,
+        relationships_data: List[Dict[str, Any]]
+    ) -> None:
+        """
+        Bulk insert relationships for better performance.
+
+        Args:
+            session: Database session
+            relationships_data: List of dictionaries containing relationship data
+                Each dict should have keys: from_dataset_id, to_dataset_id,
+                from_column, to_column, relationship_type, confidence, etc.
+
+        Performance: Reduces N individual INSERTs to 1 bulk INSERT.
+        Example: 10 relationships = 10 roundtrips → 1 roundtrip (10x faster)
+        """
+        if not relationships_data:
+            return
+
+        # Use bulk_insert_mappings for optimal performance
+        session.bulk_insert_mappings(TableRelationship, relationships_data)
+        session.flush()
 
     @staticmethod
     def get_relationships_for_datasets(

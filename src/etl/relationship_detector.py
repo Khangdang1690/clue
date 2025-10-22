@@ -247,7 +247,234 @@ class RelationshipDetector:
 
         print(f"    [LLM] Evaluating {len(candidates)} candidates ({len(name_matches)} from name matching, {len(candidates) - len(name_matches)} key-to-key pairs)")
 
-        # Analyze all candidates with LLM
+        # PRE-FILTER: Skip obviously unrelated pairs to reduce LLM calls
+        filtered_candidates = self._prefilter_candidates(candidates, datasets, metadata)
+        if len(filtered_candidates) < len(candidates):
+            print(f"    [OPTIMIZATION] Pre-filtered from {len(candidates)} to {len(filtered_candidates)} candidates")
+
+        # OPTIMIZATION: Batch evaluate with LLM instead of sequential calls
+        if len(filtered_candidates) <= 10:
+            # Small batch: Use batch evaluation (1 LLM call)
+            return self._batch_evaluate_llm(filtered_candidates, datasets, metadata)
+        else:
+            # Large batch: Split into chunks of 10 (reduces total calls significantly)
+            matches = []
+            for i in range(0, len(filtered_candidates), 10):
+                chunk = filtered_candidates[i:i+10]
+                print(f"    [LLM] Batch {i//10 + 1}: Evaluating {len(chunk)} candidates...")
+                matches.extend(self._batch_evaluate_llm(chunk, datasets, metadata))
+            return matches
+
+    def _prefilter_candidates(
+        self,
+        candidates: List[Dict],
+        datasets: Dict[str, pd.DataFrame],
+        metadata: Dict[str, Dict]
+    ) -> List[Dict]:
+        """
+        Pre-filter candidates to skip obviously unrelated pairs.
+        Reduces LLM API calls by eliminating incompatible columns.
+
+        Filters based on:
+        - Data type compatibility
+        - Semantic type compatibility
+        - Column completeness (not all null)
+        """
+        filtered = []
+
+        for candidate in candidates:
+            from_dataset_id = candidate['from_dataset_id']
+            to_dataset_id = candidate['to_dataset_id']
+            from_col = candidate['from_column']
+            to_col = candidate['to_column']
+
+            # Get dataframes
+            from_df = datasets[from_dataset_id]
+            to_df = datasets[to_dataset_id]
+
+            # Skip if either column is mostly null (>90% null)
+            from_null_pct = from_df[from_col].isna().sum() / len(from_df)
+            to_null_pct = to_df[to_col].isna().sum() / len(to_df)
+            if from_null_pct > 0.9 or to_null_pct > 0.9:
+                continue
+
+            # Get data types
+            from_dtype = from_df[from_col].dtype
+            to_dtype = to_df[to_col].dtype
+
+            # Check data type compatibility
+            from_is_numeric = from_dtype in ['int64', 'int32', 'float64', 'float32']
+            to_is_numeric = to_dtype in ['int64', 'int32', 'float64', 'float32']
+
+            # Skip if one is numeric and other is string (incompatible for FK)
+            if from_is_numeric != to_is_numeric:
+                continue
+
+            # Get semantic types
+            from_meta = metadata.get(from_dataset_id, {})
+            to_meta = metadata.get(to_dataset_id, {})
+            from_col_meta = from_meta.get('column_semantics', {}).get(from_col, {})
+            to_col_meta = to_meta.get('column_semantics', {}).get(to_col, {})
+
+            from_semantic_type = from_col_meta.get('semantic_type', '')
+            to_semantic_type = to_col_meta.get('semantic_type', '')
+
+            # Skip if one is a measure and other is a key (very unlikely relationship)
+            if (from_semantic_type == 'measure' and to_semantic_type == 'key') or \
+               (from_semantic_type == 'key' and to_semantic_type == 'measure'):
+                continue
+
+            # Skip if both are measures (measures don't relate to each other)
+            if from_semantic_type == 'measure' and to_semantic_type == 'measure':
+                continue
+
+            # Passed all filters
+            filtered.append(candidate)
+
+        return filtered
+
+    def _batch_evaluate_llm(
+        self,
+        candidates: List[Dict],
+        datasets: Dict[str, pd.DataFrame],
+        metadata: Dict[str, Dict]
+    ) -> List[Dict]:
+        """
+        Evaluate multiple candidates in a single LLM call.
+        Significantly reduces API calls from N to 1 (or N/10 for large batches).
+
+        Args:
+            candidates: List of candidate relationships to evaluate
+            datasets: Dictionary of dataframes
+            metadata: Dictionary of metadata
+
+        Returns:
+            List of matches that scored >= 0.7
+        """
+        if not candidates:
+            return []
+
+        # Build batch context
+        batch_context = []
+        for i, candidate in enumerate(candidates):
+            from_dataset_id = candidate['from_dataset_id']
+            to_dataset_id = candidate['to_dataset_id']
+            from_col = candidate['from_column']
+            to_col = candidate['to_column']
+
+            # Get metadata
+            from_meta = metadata.get(from_dataset_id, {})
+            to_meta = metadata.get(to_dataset_id, {})
+            from_col_meta = from_meta.get('column_semantics', {}).get(from_col, {})
+            to_col_meta = to_meta.get('column_semantics', {}).get(to_col, {})
+
+            # Get sample data
+            from_df = datasets[from_dataset_id]
+            to_df = datasets[to_dataset_id]
+            from_samples = from_df[from_col].dropna().head(5).tolist()
+            to_samples = to_df[to_col].dropna().head(5).tolist()
+
+            batch_context.append({
+                'index': i,
+                'from_table': from_meta.get('table_name', 'unknown'),
+                'from_domain': from_meta.get('domain', 'Unknown'),
+                'from_column': from_col,
+                'from_type': str(from_df[from_col].dtype),
+                'from_semantic_type': from_col_meta.get('semantic_type', 'unknown'),
+                'from_meaning': from_col_meta.get('business_meaning', 'N/A'),
+                'from_samples': str(from_samples[:3]),
+                'to_table': to_meta.get('table_name', 'unknown'),
+                'to_domain': to_meta.get('domain', 'Unknown'),
+                'to_column': to_col,
+                'to_type': str(to_df[to_col].dtype),
+                'to_semantic_type': to_col_meta.get('semantic_type', 'unknown'),
+                'to_meaning': to_col_meta.get('business_meaning', 'N/A'),
+                'to_samples': str(to_samples[:3])
+            })
+
+        # Batch prompt
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a database relationship expert. Evaluate multiple potential foreign key relationships at once.
+
+For each candidate, score 0.0 to 1.0 based on:
+- Column name similarity
+- Data type compatibility
+- Sample value patterns
+- Business meaning alignment
+- Semantic types (key, dimension, measure)
+
+Return ONLY a JSON array of objects, one per candidate:
+[
+  {{"index": 0, "score": 0.95, "reasoning": "brief explanation"}},
+  {{"index": 1, "score": 0.3, "reasoning": "brief explanation"}},
+  ...
+]
+
+Be strict - only score >= 0.7 if you're confident it's a real relationship."""),
+            ("user", """Evaluate these {count} potential relationships:
+
+{candidates}
+
+Return JSON array of scores:""")
+        ])
+
+        try:
+            chain = prompt | self.llm
+            result = chain.invoke({
+                "count": len(candidates),
+                "candidates": json.dumps(batch_context, indent=2)
+            })
+
+            # Parse LLM response
+            response_text = result.content.strip()
+            # Remove markdown code blocks if present
+            if '```' in response_text:
+                parts = response_text.split('```')
+                response_text = parts[1] if len(parts) > 1 else parts[0]
+                if response_text.startswith('json'):
+                    response_text = response_text[4:]
+
+            llm_results = json.loads(response_text.strip())
+
+            # Build matches from results
+            matches = []
+            for result_item in llm_results:
+                idx = result_item.get('index')
+                score = float(result_item.get('score', 0.0))
+                reasoning = result_item.get('reasoning', '')
+
+                if idx is not None and idx < len(candidates) and score >= 0.7:
+                    candidate = candidates[idx]
+                    matches.append({
+                        'from_dataset_id': candidate['from_dataset_id'],
+                        'to_dataset_id': candidate['to_dataset_id'],
+                        'from_column': candidate['from_column'],
+                        'to_column': candidate['to_column'],
+                        'llm_similarity': min(1.0, score),
+                        'llm_reasoning': reasoning
+                    })
+                    print(f"    [LLM] {candidate['from_column']} -> {candidate['to_column']}: score={score:.2f}")
+
+            return matches
+
+        except Exception as e:
+            print(f"    [ERROR] Batch LLM evaluation failed: {e}")
+            print(f"    [FALLBACK] Using sequential evaluation for {len(candidates)} candidates...")
+            # Fallback to sequential evaluation if batch fails
+            return self._fallback_sequential_evaluation(candidates, datasets, metadata)
+
+    def _fallback_sequential_evaluation(
+        self,
+        candidates: List[Dict],
+        datasets: Dict[str, pd.DataFrame],
+        metadata: Dict[str, Dict]
+    ) -> List[Dict]:
+        """
+        Fallback to sequential evaluation if batch evaluation fails.
+        This is the old code path kept for reliability.
+        """
+        matches = []
+
         for candidate in candidates:
             from_dataset_id = candidate['from_dataset_id']
             to_dataset_id = candidate['to_dataset_id']
@@ -306,7 +533,7 @@ Score this as a foreign key relationship:""")
                     "from_type": str(from_df[from_col].dtype),
                     "from_semantic_type": from_col_meta.get('semantic_type', 'unknown'),
                     "from_meaning": from_col_meta.get('business_meaning', 'N/A'),
-                    "from_samples": str(from_samples[:3]),  # Show 3 samples
+                    "from_samples": str(from_samples[:3]),
                     "to_table": to_meta.get('table_name', 'unknown'),
                     "to_domain": to_meta.get('domain', 'Unknown'),
                     "to_col": to_col,

@@ -276,8 +276,24 @@ class DatasetManager:
             if cascade:
                 self._cascade_delete_dependencies(session, dependencies)
 
-            # Save table name before deleting (object will be detached after delete)
+            # Save info before deleting (object will be detached after delete)
             table_name = dataset.table_name
+            file_path = dataset.file_path
+
+            # Delete file from storage
+            if file_path:
+                try:
+                    from app.services.storage_service import StorageService
+                    storage_service = StorageService()
+                    storage_type = "GCS" if storage_service.use_gcs else "local storage"
+
+                    if storage_service.file_exists(file_path):
+                        storage_service.delete_file(file_path)
+                        print(f"[STORAGE] Deleted file from {storage_type}: {file_path}")
+                    else:
+                        print(f"[STORAGE] File not found: {file_path}")
+                except Exception as e:
+                    print(f"[STORAGE] Warning: Could not delete file: {e}")
 
             # Delete the dataset record
             session.delete(dataset)
