@@ -1,5 +1,5 @@
 """
-Clue API Server - Main entry point for the FastAPI application.
+iClue API Server - Main entry point for the FastAPI application.
 
 This script initializes the database and starts the FastAPI server.
 """

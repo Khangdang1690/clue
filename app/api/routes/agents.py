@@ -10,7 +10,6 @@ from typing import Optional
 
 from app.api.deps import get_db
 from app.services.agent_service import AgentService
-from app.services.analysis_progress_service import AnalysisProgressService
 from app.schemas.agent import (
     DiscoveryRequest,
     DiscoveryResponse,
@@ -35,25 +34,35 @@ async def run_business_discovery_background(
     """
     Background task to run business discovery workflow.
 
-    This runs the full 8-step workflow and emits progress updates via AnalysisProgressService.
+    This runs the full 8-step workflow and streams narrative messages via AnalysisMessageService.
     """
-    # Progress is already initialized in the main endpoint before this task runs
-    # This prevents race condition with SSE client connection
+    # Add a small delay to allow streaming client to connect
+    print(f"[BG_TASK] Waiting 800ms for client to connect...")
+    await asyncio.sleep(0.8)  # 800ms delay
+    print(f"[BG_TASK] Starting workflow execution")
 
     try:
         # Import workflow
         from src.graph.business_discovery_workflow import BusinessDiscoveryWorkflow
+        import concurrent.futures
 
-        # Create workflow instance with progress service
-        workflow = BusinessDiscoveryWorkflow()
+        # Get the current event loop (FastAPI's loop) and pass it to workflow
+        loop = asyncio.get_running_loop()
 
-        # Run the workflow
-        result = workflow.run_discovery(
-            company_id=company_id,
-            dataset_ids=dataset_ids,
-            analysis_name=analysis_name,
-            analysis_id=analysis_id
-        )
+        # Run workflow in a separate thread so it doesn't block the event loop
+        def run_workflow_sync():
+            workflow = BusinessDiscoveryWorkflow(event_loop=loop)
+            return workflow.run_discovery(
+                company_id=company_id,
+                dataset_ids=dataset_ids,
+                analysis_name=analysis_name,
+                analysis_id=analysis_id
+            )
+
+        # Execute in thread pool (allows event loop to process messages)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_workflow_sync)
+            result = await loop.run_in_executor(None, future.result)
 
         # Check if workflow succeeded
         print(f"[BG_TASK] Workflow returned")
@@ -76,8 +85,9 @@ async def run_business_discovery_background(
                         error_message=result.get('error', 'Unknown error occurred')
                     )
 
-                    # Emit error event to SSE clients
-                    await AnalysisProgressService.mark_failed(
+                    # Emit error message
+                    from app.services.analysis_message_service import AnalysisMessageService
+                    await AnalysisMessageService.emit_error(
                         analysis_id=analysis_id,
                         error=result.get('error', 'Unknown error occurred')
                     )
@@ -118,16 +128,15 @@ async def run_business_discovery_background(
 
             print(f"[BG_TASK] Database session closed")
 
-            # Emit completion event to SSE clients
-            print(f"[BG_TASK] Emitting completion event to SSE clients")
-            await AnalysisProgressService.mark_completed(
+            # Emit completion message
+            print(f"[BG_TASK] Emitting completion message")
+            from app.services.analysis_message_service import AnalysisMessageService
+            await AnalysisMessageService.emit_complete(
                 analysis_id=analysis_id,
-                dashboard_url=f"/api/analyses/{analysis_id}/dashboard",
-                report_path=result.get('report_path', ''),
                 insights_count=insights_count,
                 recommendations_count=recommendations_count
             )
-            print(f"[BG_TASK] Completion event emitted")
+            print(f"[BG_TASK] Completion message emitted")
 
         except Exception as e:
             print(f"[BG_TASK ERROR] Exception during database update: {e}")
@@ -144,8 +153,9 @@ async def run_business_discovery_background(
                 error_message=str(e)
             )
 
-        # Emit error event to SSE clients
-        await AnalysisProgressService.mark_failed(
+        # Emit error message
+        from app.services.analysis_message_service import AnalysisMessageService
+        await AnalysisMessageService.emit_error(
             analysis_id=analysis_id,
             error=str(e)
         )
@@ -285,10 +295,6 @@ async def run_business_discovery(
         # The background task uses a different session and needs to see this record
         db.commit()
         print(f"[API] Analysis {analysis_id} created and committed to database")
-
-        # Initialize progress tracking BEFORE scheduling background task
-        # This prevents race condition where SSE client connects before progress is initialized
-        AnalysisProgressService.initialize_analysis(analysis_id)
 
         # Schedule background task to run the workflow
         background_tasks.add_task(

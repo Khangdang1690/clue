@@ -10,9 +10,9 @@ import markdown
 import tempfile
 import asyncio
 import json
+import shutil
 
 from app.api.deps import get_db
-from app.services.analysis_progress_service import AnalysisProgressService
 from src.database.repository import AnalysisSessionRepository
 from src.database.models import User
 
@@ -118,68 +118,65 @@ async def get_analysis(
 
 
 @router.get("/analyses/{analysis_id}/stream")
-async def stream_analysis_progress(analysis_id: str):
+async def stream_analysis_messages(analysis_id: str):
     """
-    Stream real-time progress updates for an analysis using Server-Sent Events (SSE).
+    Stream real-time narrative messages as analysis runs (Claude-style).
 
-    This endpoint provides real-time updates as the workflow progresses through its 8 steps.
-    Events are sent in the format:
-    - event: progress | complete | error
-    - data: JSON object with progress details
+    Uses HTTP chunked transfer with NDJSON format.
+    Each line is a complete JSON message object.
+
+    Message types:
+    - message: Narrative update (e.g., "Loading datasets from database...")
+    - complete: Analysis finished
+    - error: Analysis failed
     """
+    from app.services.analysis_message_service import AnalysisMessageService
 
-    async def event_generator():
-        """Generate SSE events for the analysis progress."""
+    async def message_generator():
+        """Generate message chunks as analysis runs."""
         try:
-            # Register this client with the progress service
-            print(f"[SSE] Registering client for analysis {analysis_id}")
-            queue = await AnalysisProgressService.register_client(analysis_id)
-            print(f"[SSE] Client registered, queue received")
+            print(f"[STREAM] Client connecting for analysis {analysis_id}")
+            queue = await AnalysisMessageService.register_client(analysis_id)
+            print(f"[STREAM] Client registered")
 
             try:
                 while True:
-                    # Wait for progress updates (with timeout to send keepalive)
                     try:
-                        event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                        print(f"[SSE] Received event: {event.get('event')}")
+                        # Wait for messages (with keepalive timeout)
+                        message = await asyncio.wait_for(queue.get(), timeout=15.0)
 
-                        # Format as SSE event
-                        event_type = event.get('event', 'progress')
-                        event_data = event.get('data', {})
+                        # Send as NDJSON (newline-delimited JSON)
+                        chunk = json.dumps(message) + "\n"
+                        print(f"[STREAM] Sending: type={message.get('type')}, content={message.get('content', '')[:50]}...")
+                        yield chunk
 
-                        # Send the event
-                        yield f"event: {event_type}\n"
-                        yield f"data: {json.dumps(event_data)}\n\n"
-
-                        # If analysis completed or failed, close the stream
-                        if event_type in ('complete', 'error'):
-                            print(f"[SSE] Analysis {event_type}, closing stream")
+                        # Close stream on completion or error
+                        if message.get('type') in ('complete', 'error'):
+                            print(f"[STREAM] Stream ending: {message.get('type')}")
                             break
 
                     except asyncio.TimeoutError:
-                        # Send keepalive comment to prevent connection timeout
-                        yield ": keepalive\n\n"
+                        # Keepalive ping
+                        yield json.dumps({"type": "keepalive"}) + "\n"
 
             except asyncio.CancelledError:
-                # Client disconnected
-                print(f"[SSE] Client disconnected for analysis {analysis_id}")
+                print(f"[STREAM] Client disconnected")
             finally:
-                # Unregister this client
-                await AnalysisProgressService.unregister_client(analysis_id, queue)
-                print(f"[SSE] Client unregistered")
+                await AnalysisMessageService.unregister_client(analysis_id, queue)
+
         except Exception as e:
-            print(f"[SSE ERROR] Exception in event generator: {e}")
+            print(f"[STREAM ERROR] {e}")
             import traceback
             traceback.print_exc()
-            raise
+            yield json.dumps({"type": "error", "error": str(e)}) + "\n"
 
     return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
+        message_generator(),
+        media_type="application/x-ndjson",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
         }
     )
 
@@ -659,37 +656,20 @@ async def delete_analysis(
         if not analysis:
             raise HTTPException(status_code=404, detail="Analysis not found")
 
-        # Delete files if they exist
-        files_deleted = []
-        if analysis.dashboard_path:
-            dashboard_full_path = os.path.join("data", "outputs", analysis.dashboard_path)
-            if os.path.exists(dashboard_full_path):
-                os.remove(dashboard_full_path)
-                files_deleted.append("dashboard")
-
-        if analysis.report_path:
-            report_full_path = os.path.join("data", "outputs", analysis.report_path)
-            if os.path.exists(report_full_path):
-                os.remove(report_full_path)
-                files_deleted.append("report")
-
-        # Delete viz_data.json
-        viz_data_path = os.path.join(
+        # Delete the entire analysis directory
+        # Structure: data/outputs/analyses/{company_id}/{analysis_id}/
+        analysis_dir = os.path.join(
             "data", "outputs", "analyses",
-            analysis.company_id, analysis_id, "viz_data.json"
+            analysis.company_id, analysis_id
         )
-        if os.path.exists(viz_data_path):
-            os.remove(viz_data_path)
-            files_deleted.append("viz_data")
 
-        # Try to delete the analysis directory if empty
-        if analysis.dashboard_path:
-            analysis_dir = os.path.dirname(os.path.join("data", "outputs", analysis.dashboard_path))
+        if os.path.exists(analysis_dir):
             try:
-                if os.path.exists(analysis_dir) and not os.listdir(analysis_dir):
-                    os.rmdir(analysis_dir)
-            except:
-                pass  # Directory not empty or other error, ignore
+                shutil.rmtree(analysis_dir)
+                print(f"[DELETE] Removed analysis directory: {analysis_dir}")
+            except Exception as e:
+                print(f"[DELETE ERROR] Failed to remove directory {analysis_dir}: {e}")
+                # Continue with database deletion even if file deletion fails
 
         # Delete database record
         AnalysisSessionRepository.delete(
@@ -700,7 +680,7 @@ async def delete_analysis(
         return {
             "success": True,
             "message": "Analysis deleted successfully",
-            "files_deleted": files_deleted
+            "directory_deleted": analysis_dir if os.path.exists(analysis_dir) else None
         }
 
     except HTTPException:

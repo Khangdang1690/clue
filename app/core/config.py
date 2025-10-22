@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Application settings."""
 
     # App Info
-    app_name: str = "Clue API"
+    app_name: str = "iClue API"
     app_version: str = "1.0.0"
     app_description: str = "Auto-ETL System with AI-powered data discovery"
 

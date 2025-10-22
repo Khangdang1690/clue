@@ -1,5 +1,5 @@
 [project]
-name = "clue"
+name = "iclue"
 version = "0.1.0"
 description = "ETL to Insights AI Agent"
 requires-python = ">=3.11"

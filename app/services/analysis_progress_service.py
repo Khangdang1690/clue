@@ -14,7 +14,7 @@ class AnalysisProgressService:
 
     Stores progress updates in memory and provides methods for:
     - Emitting progress updates from workflow nodes
-    - Streaming progress to SSE clients
+    - Streaming progress to HTTP clients (NDJSON format)
     - Tracking step completion and status
     """
 
@@ -23,7 +23,7 @@ class AnalysisProgressService:
     _progress_store: Dict[str, Dict[str, Any]] = {}
     _store_lock = Lock()
 
-    # SSE client queues: {analysis_id: [queue1, queue2, ...]}
+    # Streaming client queues: {analysis_id: [queue1, queue2, ...]}
     _client_queues: Dict[str, List[asyncio.Queue]] = defaultdict(list)
     _queues_lock = Lock()
 
@@ -74,6 +74,16 @@ class AnalysisProgressService:
     @classmethod
     def initialize_analysis(cls, analysis_id: str) -> None:
         """Initialize progress tracking for a new analysis."""
+        print(f"[PROGRESS] initialize_analysis called for {analysis_id}")
+
+        # CRITICAL: Clear any existing client queues for this analysis
+        # This prevents old streaming connections from receiving stale data
+        with cls._queues_lock:
+            if analysis_id in cls._client_queues:
+                print(f"[PROGRESS] Clearing {len(cls._client_queues[analysis_id])} existing client queue(s)")
+                cls._client_queues[analysis_id] = []
+
+        # Initialize fresh progress state
         with cls._store_lock:
             cls._progress_store[analysis_id] = {
                 'analysis_id': analysis_id,
@@ -94,6 +104,7 @@ class AnalysisProgressService:
                     for step in cls.WORKFLOW_STEPS
                 }
             }
+            print(f"[PROGRESS] Initialized progress store: status='running', current_step=0, total_steps={len(cls.WORKFLOW_STEPS)}")
 
     @classmethod
     async def emit_progress(
@@ -142,7 +153,7 @@ class AnalysisProgressService:
             else:
                 print(f"[PROGRESS WARNING] Step {step_name} not found in workflow steps")
 
-        # Send update to all connected SSE clients
+        # Send update to all connected streaming clients
         print(f"[PROGRESS] Broadcasting update to clients")
         await cls._broadcast_update(analysis_id)
 
@@ -196,29 +207,83 @@ class AnalysisProgressService:
 
     @classmethod
     async def register_client(cls, analysis_id: str) -> asyncio.Queue:
-        """Register a new SSE client and return its queue."""
+        """Register a new streaming client and return its queue."""
         print(f"[PROGRESS] Registering new client for analysis {analysis_id}")
         queue = asyncio.Queue()
         with cls._queues_lock:
             cls._client_queues[analysis_id].append(queue)
             print(f"[PROGRESS] Total clients for {analysis_id}: {len(cls._client_queues[analysis_id])}")
 
-        # Send current progress immediately
+        # Send ONLY current progress state (not full history)
+        # This prevents overwhelming the client with all past events at once
         progress = cls.get_progress(analysis_id)
         if progress:
-            print(f"[PROGRESS] Sending initial progress to new client: current_step={progress.get('current_step')}, status={progress.get('status')}")
-            await queue.put({
-                'event': 'progress',
-                'data': progress
-            })
+            print(f"[PROGRESS] Sending current progress to new client:")
+            print(f"  - current_step: {progress.get('current_step')}")
+            print(f"  - total_steps: {progress.get('total_steps')}")
+            print(f"  - status: {progress.get('status')}")
+            print(f"  - analysis_id: {progress.get('analysis_id')}")
+
+            # Log step statuses to debug
+            steps_summary = {}
+            if 'steps' in progress:
+                for step_name, step_data in progress['steps'].items():
+                    steps_summary[step_name] = step_data.get('status', 'unknown')
+            print(f"  - steps: {steps_summary}")
+
+            # If the analysis is already completed/failed, immediately emit terminal event
+            status = progress.get('status')
+            if status in ('completed', 'failed'):
+                if status == 'completed':
+                    event = {
+                        'event': 'complete',
+                        'data': {
+                            'analysis_id': analysis_id,
+                            'status': 'completed',
+                            'dashboard_url': progress.get('dashboard_url'),
+                            'report_path': progress.get('report_path'),
+                            'insights_count': progress.get('insights_count', 0),
+                            'recommendations_count': progress.get('recommendations_count', 0),
+                        }
+                    }
+                else:
+                    event = {
+                        'event': 'error',
+                        'data': {
+                            'analysis_id': analysis_id,
+                            'status': 'failed',
+                            'error': progress.get('error', 'Unknown error'),
+                            'failed_step': progress.get('failed_step'),
+                        }
+                    }
+                await queue.put(event)
+            else:
+                # CRITICAL: Send a deep copy so mutations don't affect queued events
+                import copy
+                progress_snapshot = copy.deepcopy(progress)
+                await queue.put({
+                    'event': 'progress',
+                    'data': progress_snapshot
+                })
         else:
             print(f"[PROGRESS WARNING] No progress data found for {analysis_id} when registering client")
+            print(f"[PROGRESS] Initializing progress for {analysis_id}")
+            cls.initialize_analysis(analysis_id)
+            progress = cls.get_progress(analysis_id)
+            if progress:
+                # CRITICAL: Send a deep copy
+                import copy
+                progress_snapshot = copy.deepcopy(progress)
+                await queue.put({
+                    'event': 'progress',
+                    'data': progress_snapshot
+                })
 
         return queue
 
     @classmethod
     async def unregister_client(cls, analysis_id: str, queue: asyncio.Queue) -> None:
-        """Unregister an SSE client."""
+        """Unregister a streaming client."""
         with cls._queues_lock:
             if analysis_id in cls._client_queues:
                 if queue in cls._client_queues[analysis_id]:
@@ -232,20 +297,33 @@ class AnalysisProgressService:
             print(f"[PROGRESS] No progress data found for {analysis_id}")
             return
 
+        # CRITICAL: Create a deep copy of the progress data
+        # Without this, all queued events point to the same mutable dict
+        # and get the LATEST state instead of the state at broadcast time
+        import copy
+        progress_snapshot = copy.deepcopy(progress)
+
         event = {
             'event': 'progress',
-            'data': progress
+            'data': progress_snapshot
         }
 
+        # Broadcast to connected clients
         with cls._queues_lock:
             queues = cls._client_queues.get(analysis_id, [])
-            print(f"[PROGRESS] Broadcasting to {len(queues)} connected clients")
-            for queue in queues:
+            current_step = progress_snapshot.get('current_step', 0)
+            status = progress_snapshot.get('status', 'unknown')
+            print(f"[PROGRESS BROADCAST] Step {current_step}/8, Status: {status}, Clients: {len(queues)}")
+
+            if len(queues) == 0:
+                print(f"[PROGRESS WARNING] No clients connected to receive broadcast!")
+
+            for i, queue in enumerate(queues):
                 try:
                     await queue.put(event)
-                    print(f"[PROGRESS] Event added to queue successfully")
+                    print(f"[PROGRESS BROADCAST] Event queued for client #{i+1} ✓")
                 except Exception as e:
-                    print(f"[PROGRESS ERROR] Error broadcasting to client: {e}")
+                    print(f"[PROGRESS BROADCAST ERROR] Failed to queue for client #{i+1}: {e}")
 
     @classmethod
     async def _broadcast_completion(cls, analysis_id: str) -> None:
@@ -266,6 +344,7 @@ class AnalysisProgressService:
             }
         }
 
+        # Broadcast to connected clients
         with cls._queues_lock:
             queues = cls._client_queues.get(analysis_id, [])
             for queue in queues:
@@ -291,6 +370,7 @@ class AnalysisProgressService:
             }
         }
 
+        # Broadcast to connected clients
         with cls._queues_lock:
             queues = cls._client_queues.get(analysis_id, [])
             for queue in queues:

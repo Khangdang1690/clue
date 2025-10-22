@@ -19,12 +19,12 @@ from src.analytics.causal_inference import CausalAnalyzer
 from src.analytics.variance_decomposition import VarianceDecomposer
 import google.generativeai as genai
 
-# Import progress service for real-time updates
+# Import message service for real-time streaming
 try:
-    from app.services.analysis_progress_service import AnalysisProgressService
+    from app.services.analysis_message_service import AnalysisMessageService
 except ImportError:
     # Fallback if not available
-    AnalysisProgressService = None
+    AnalysisMessageService = None
 
 
 class BusinessDiscoveryState(Dict):
@@ -51,8 +51,13 @@ class BusinessDiscoveryState(Dict):
 class BusinessDiscoveryWorkflow:
     """Workflow for business-focused data discovery."""
 
-    def __init__(self):
-        """Initialize the business discovery workflow."""
+    def __init__(self, event_loop=None):
+        """Initialize the business discovery workflow.
+
+        Args:
+            event_loop: Optional event loop for async operations (message streaming)
+        """
+        self.event_loop = event_loop  # Store event loop for message streaming
         self.explorer = DynamicDataExplorer()
 
         # Use the BusinessAnalystLLM for proper code generation
@@ -80,38 +85,46 @@ class BusinessDiscoveryWorkflow:
         # Build workflow
         self.graph = self._build_workflow()
 
-    def _emit_progress(self, analysis_id: Optional[str], step_name: str, status: str, details: Optional[Dict[str, Any]] = None):
-        """Emit progress update for the workflow step."""
-        if not analysis_id or not AnalysisProgressService:
+    def _emit_message(self, analysis_id: Optional[str], message: str, message_type: str = 'info'):
+        """Emit a narrative message for streaming to clients."""
+        if not analysis_id or not AnalysisMessageService:
             return
 
         try:
-            print(f"[WORKFLOW] Emitting progress: {step_name} - {status}")
+            print(f"[WORKFLOW] Streaming message: {message[:80]}")
 
-            # Run async function from sync context using threading
-            # This avoids "event loop already running" errors when called from FastAPI background tasks
-            import threading
-            import concurrent.futures
+            # Use the stored event loop (FastAPI's main loop)
+            if self.event_loop:
+                # Schedule the coroutine in the main event loop (don't wait for result)
+                future = asyncio.run_coroutine_threadsafe(
+                    AnalysisMessageService.emit_message(analysis_id, message, message_type),
+                    self.event_loop
+                )
+                # Wait for the message to actually be sent before continuing
+                import time
+                time.sleep(0.1)  # 100ms delay to ensure message is flushed
 
-            def run_async_in_thread():
-                """Run the async function in a new thread with its own event loop."""
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
+                # Optional: wait for the future to complete (with timeout)
                 try:
-                    new_loop.run_until_complete(
-                        AnalysisProgressService.emit_progress(analysis_id, step_name, status, details)
+                    future.result(timeout=1.0)  # Wait max 1 second
+                    print(f"[WORKFLOW] Message sent successfully")
+                except Exception as e:
+                    print(f"[WORKFLOW] Message send failed: {e}")
+            else:
+                # Fallback: create temporary loop (shouldn't happen in production)
+                print("[WORKFLOW WARNING] No event loop provided, using fallback")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(
+                        AnalysisMessageService.emit_message(analysis_id, message, message_type)
                     )
                 finally:
-                    new_loop.close()
+                    loop.close()
 
-            # Execute in a thread to avoid event loop conflicts
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(run_async_in_thread)
-                future.result(timeout=5)  # 5 second timeout
-
-            print(f"[WORKFLOW] Progress emitted successfully for {step_name}")
+            print(f"[WORKFLOW] Message sent successfully")
         except Exception as e:
-            print(f"[WORKFLOW ERROR] Failed to emit progress for {step_name}: {e}")
+            print(f"[WORKFLOW ERROR] Failed to emit message: {e}")
             import traceback
             traceback.print_exc()
 
@@ -190,12 +203,11 @@ class BusinessDiscoveryWorkflow:
         print("\n[STEP 1] Loading Data from Database")
         print("-" * 40)
 
-        # Emit progress: starting
-        self._emit_progress(
+        # Stream message: starting
+        self._emit_message(
             state.get('analysis_id'),
-            'load_data',
-            'running',
-            {'message': 'Loading datasets from database...'}
+            'Loading datasets from database...',
+            'thinking'
         )
 
         try:
@@ -207,6 +219,14 @@ class BusinessDiscoveryWorkflow:
             for name, df in datasets.items():
                 print(f"  [OK] {name}: {df.shape[0]:,} rows x {df.shape[1]} columns")
 
+            # Stream message: found datasets
+            total_rows = sum(df.shape[0] for df in datasets.values())
+            self._emit_message(
+                state.get('analysis_id'),
+                f'Found {len(datasets)} dataset(s) with {total_rows:,} total rows.',
+                'info'
+            )
+
             # Create analysis directory early so viz_data.json is stored there
             company_id = state['company_id']
             analysis_id = state.get('analysis_id')
@@ -214,7 +234,6 @@ class BusinessDiscoveryWorkflow:
             os.makedirs(analysis_dir, exist_ok=True)
 
             # Initialize visualization data store for this analysis
-            # Pass analysis_dir so viz_data.json is stored alongside report and dashboard
             company_name = state.get('company_name', 'unknown_company')
             self.viz_data_store = VisualizationDataStore(
                 dataset_name=f"business_discovery_{company_name}",
@@ -223,7 +242,7 @@ class BusinessDiscoveryWorkflow:
                     'datasets': list(datasets.keys()),
                     'analysis_type': 'business_discovery'
                 },
-                output_dir=analysis_dir  # Save viz_data.json to analysis directory
+                output_dir=analysis_dir
             )
             state['viz_data_path'] = str(self.viz_data_store.json_path)
 
@@ -249,28 +268,22 @@ class BusinessDiscoveryWorkflow:
 
                 print(f"\n  Found {len(relationships)} relationships between tables")
 
-            # Emit progress: completed
-            self._emit_progress(
-                state.get('analysis_id'),
-                'load_data',
-                'completed',
-                {
-                    'message': f'Loaded {len(datasets)} dataset(s)',
-                    'datasets_count': len(datasets),
-                    'total_rows': sum(df.shape[0] for df in datasets.values()),
-                    'relationships_count': len(relationships)
-                }
-            )
+                # Stream message: relationships found
+                if len(relationships) > 0:
+                    self._emit_message(
+                        state.get('analysis_id'),
+                        f'Discovered {len(relationships)} relationships between tables.',
+                        'insight'
+                    )
 
         except Exception as e:
             state['error'] = f"Failed to load data: {e}"
             state['status'] = 'error'
-            # Emit progress: failed
-            self._emit_progress(
+            # Stream error message
+            self._emit_message(
                 state.get('analysis_id'),
-                'load_data',
-                'failed',
-                {'error': str(e)}
+                f'Error loading data: {str(e)}',
+                'error'
             )
 
         return state
@@ -282,11 +295,10 @@ class BusinessDiscoveryWorkflow:
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'understand_business',
-            'running',
-            {'message': 'Analyzing business context...'}
+            'Analyzing business context and understanding your data domain...',
+            'thinking'
         )
 
         if not self.model:
@@ -351,26 +363,20 @@ business_type, key_drivers, challenges, key_questions"""
                 print(f"  Key Drivers: {', '.join(drivers)}")
 
             # Emit progress: completed
-            self._emit_progress(
+            self._emit_message(
                 state.get('analysis_id'),
-                'understand_business',
-                'completed',
-                {
-                    'message': 'Business context understood',
-                    'business_type': business_context.get('business_type', 'Unknown'),
-                    'questions_count': len(business_context.get('key_questions', []))
-                }
+                f'Business context understood: {business_context.get("business_type", "Data Analysis")}',
+                'info'
             )
 
         except Exception as e:
             print(f"  [ERROR] Business understanding failed: {e}")
             state['business_context'] = self._basic_business_understanding(state)
             # Still emit completed even if fallback was used
-            self._emit_progress(
+            self._emit_message(
                 state.get('analysis_id'),
-                'understand_business',
-                'completed',
-                {'message': 'Using basic business context'}
+                f'Business context understood: {business_context.get("business_type", "Data Analysis")}',
+                'info'
             )
 
         return state
@@ -382,11 +388,10 @@ business_type, key_drivers, challenges, key_questions"""
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'explore_dynamically',
-            'running',
-            {'message': 'Starting data exploration...'}
+            'Exploring data patterns and relationships...',
+            'thinking'
         )
 
         # Always run basic exploration first
@@ -417,16 +422,11 @@ business_type, key_drivers, challenges, key_questions"""
             for i, question in enumerate(questions, 1):
                 print(f"\n  Question {i}: {question[:80]}...")
 
-                # Emit sub-progress: analyzing question
-                self._emit_progress(
+                # Stream message for current question
+                self._emit_message(
                     state.get('analysis_id'),
-                    'explore_dynamically',
-                    'running',
-                    {
-                        'message': f'Analyzing question {i} of {len(questions)}',
-                        'current_question': question[:80],
-                        'progress_percent': int((i-1) / len(questions) * 100)
-                    }
+                    f'Analyzing: {question[:100]}...',
+                    'thinking'
                 )
 
                 # Note: BusinessAnalystLLM handles code generation with dynamic examples
@@ -507,16 +507,11 @@ business_type, key_drivers, challenges, key_questions"""
             print(f"\n  Completed {len(all_executions)} analyses")
             print(f"  Found {len(all_insights)} potential insights")
 
-            # Emit progress: completed
-            self._emit_progress(
+            # Stream completion message
+            self._emit_message(
                 state.get('analysis_id'),
-                'explore_dynamically',
-                'completed',
-                {
-                    'message': f'Explored {len(questions)} questions',
-                    'analyses_count': len(all_executions),
-                    'insights_count': len(all_insights)
-                }
+                f'Exploration complete. Identified {len(all_insights)} data patterns for analysis.',
+                'success'
             )
 
         except Exception as e:
@@ -525,11 +520,10 @@ business_type, key_drivers, challenges, key_questions"""
             print(f"  [DEBUG] Traceback: {traceback.format_exc()[:500]}")
             state['exploration_results'] = {}
             # Emit progress: completed with error
-            self._emit_progress(
+            self._emit_message(
                 state.get('analysis_id'),
-                'explore_dynamically',
-                'completed',
-                {'message': 'Exploration completed with errors'}
+                f'Exploration complete. Continuing with analysis...',
+                'success'
             )
 
         return state
@@ -541,11 +535,10 @@ business_type, key_drivers, challenges, key_questions"""
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'run_analytics',
-            'running',
-            {'message': 'Running anomaly detection, forecasting, causal analysis...'}
+            'Running advanced analytics: anomaly detection, forecasting, causal analysis...',
+            'thinking'
         )
 
         analytics_results = {}
@@ -738,17 +731,10 @@ business_type, key_drivers, challenges, key_questions"""
             print(f"    - Variance analyses: {len(variance_results)}")
 
             # Emit progress: completed
-            self._emit_progress(
+            self._emit_message(
                 state.get('analysis_id'),
-                'run_analytics',
-                'completed',
-                {
-                    'message': 'Advanced analytics completed',
-                    'anomalies_count': len(anomaly_results),
-                    'forecasts_count': len(forecast_results),
-                    'causal_count': len(causal_results),
-                    'variance_count': len(variance_results)
-                }
+                f'Advanced analytics complete. Detected {len(anomaly_results)} anomalies, generated {len(forecast_results)} forecasts.',
+                'success'
             )
 
         except Exception as e:
@@ -757,11 +743,10 @@ business_type, key_drivers, challenges, key_questions"""
             print(f"  [DEBUG] Traceback: {traceback.format_exc()[:500]}")
             state['analytics_results'] = {}
             # Emit progress: completed with errors
-            self._emit_progress(
+            self._emit_message(
                 state.get('analysis_id'),
-                'run_analytics',
-                'completed',
-                {'message': 'Analytics completed with errors'}
+                f'Advanced analytics complete. Detected {len(anomaly_results)} anomalies, generated {len(forecast_results)} forecasts.',
+                'success'
             )
 
         return state
@@ -773,102 +758,57 @@ business_type, key_drivers, challenges, key_questions"""
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'generate_insights',
-            'running',
-            {'message': 'Generating insights from data analysis...'}
+            'Discovering key insights and trends in your data...',
+            'insight'
         )
 
         raw_insights = state['exploration_results'].get('raw_insights', [])
         analytics_results = state.get('analytics_results', {})
 
-        # Combine insights from exploration and analytics
-        all_insights = []
-
-        # Process exploration insights
+        # Process ONLY exploration insights as true "business insights"
+        business_insights = []
         for raw in raw_insights:
             insight = self._convert_to_business_insight(raw)
             if insight:
-                all_insights.append(insight)
+                business_insights.append(insight)
 
-        # Process analytics insights
-        if analytics_results:
-            # Anomaly insights
-            for anomaly in analytics_results.get('anomalies', []):
-                if anomaly['num_anomalies'] > 0:
-                    finding = f"Found {anomaly['num_anomalies']} unusual values in {anomaly['table']}.{anomaly['column']} that may indicate data quality issues or exceptional business events"
-                    all_insights.append({
-                        'title': f"Anomalies Detected in {anomaly['table']}.{anomaly['column']}",
-                        'finding': finding,
-                        'description': finding,
-                        'evidence': anomaly,
-                        'category': 'anomaly',
-                        'impact': 'medium',
-                        'type': 'analytics'
-                    })
+        # Count analytics results separately (these are technical findings, not insights)
+        num_anomalies = len([a for a in analytics_results.get('anomalies', []) if a.get('num_anomalies', 0) > 0])
+        num_forecasts = len([f for f in analytics_results.get('forecasts', []) if f.get('forecast_values')])
+        num_relationships = len([c for c in analytics_results.get('causal_relationships', []) if c.get('is_significant')])
+        num_drivers = len([v for v in analytics_results.get('variance_decomposition', []) if v.get('variance_explained', 0) > 0.2])
 
-            # Forecast insights
-            for forecast in analytics_results.get('forecasts', []):
-                if forecast.get('forecast_values'):
-                    finding = f"Projected trends for {forecast['metric']} based on historical patterns in {forecast['table']}"
-                    all_insights.append({
-                        'title': f"7-Day Forecast for {forecast['metric']}",
-                        'finding': finding,
-                        'description': finding,
-                        'evidence': forecast,
-                        'category': 'forecast',
-                        'impact': 'high',
-                        'type': 'analytics'
-                    })
-
-            # Causal insights
-            for causal in analytics_results.get('causal_relationships', []):
-                if causal.get('is_significant', False):
-                    finding = f"Statistical analysis reveals a {causal.get('strength', 'significant')} causal relationship between {causal['cause']} and {causal['effect']} (p-value: {causal.get('p_value', 0):.4f})"
-                    all_insights.append({
-                        'title': f"Significant relationship: {causal['cause']} -> {causal['effect']}",
-                        'finding': finding,
-                        'description': finding,
-                        'evidence': causal,
-                        'category': 'relationship',
-                        'impact': 'high' if causal.get('strength') == 'strong' else 'medium',
-                        'type': 'analytics'
-                    })
-
-            # Variance insights
-            for variance in analytics_results.get('variance_decomposition', []):
-                if variance['variance_explained'] > 0.2:  # Explains >20% of variance
-                    finding = f"{variance['factor']} explains {variance['variance_explained']:.1%} of the variance in {variance['metric']}"
-                    all_insights.append({
-                        'title': f"{variance['factor']} drives {variance['metric']} variation",
-                        'finding': finding,
-                        'description': finding,
-                        'evidence': variance,
-                        'category': 'driver',
-                        'impact': 'high' if variance['variance_explained'] > 0.5 else 'medium',
-                        'type': 'analytics'
-                    })
-
-        if all_insights:
-            print(f"  [OK] Generated {len(all_insights)} insights")
-            for insight in all_insights:
+        if business_insights:
+            print(f"  [OK] Generated {len(business_insights)} business insights")
+            for insight in business_insights:
                 print(f"    - {insight['title']}")
         else:
             print("  No insights discovered")
 
-        # Emit progress: completed
-        self._emit_progress(
+        print(f"  [OK] Analytics results: {num_anomalies} anomalies, {num_forecasts} forecasts, {num_relationships} relationships, {num_drivers} drivers")
+
+        # Stream completion message - separate insights from analytics
+        analytics_summary = []
+        if num_anomalies > 0:
+            analytics_summary.append(f"{num_anomalies} anomalies")
+        if num_forecasts > 0:
+            analytics_summary.append(f"{num_forecasts} forecasts")
+        if num_relationships > 0:
+            analytics_summary.append(f"{num_relationships} causal relationships")
+        if num_drivers > 0:
+            analytics_summary.append(f"{num_drivers} key drivers")
+
+        analytics_text = ", ".join(analytics_summary) if analytics_summary else "no additional analytics"
+
+        self._emit_message(
             state.get('analysis_id'),
-            'generate_insights',
-            'completed',
-            {
-                'message': f'Generated {len(all_insights)} insights',
-                'insights_count': len(all_insights)
-            }
+            f'Generated {len(business_insights)} business insights with {analytics_text}.',
+            'success'
         )
 
-        state['insights'] = all_insights
+        state['insights'] = business_insights
         return state
 
     def _synthesize_insights_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
@@ -878,11 +818,10 @@ business_type, key_drivers, challenges, key_questions"""
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'synthesize_insights',
-            'running',
-            {'message': 'Synthesizing insights into business narratives...'}
+            'Synthesizing insights into actionable business narratives...',
+            'thinking'
         )
 
         insights = state['insights']
@@ -960,15 +899,11 @@ Return your response as a JSON array:
             print("  Using raw insights as fallback")
             state['synthesized_insights'] = insights
 
-        # Emit progress: completed
-        self._emit_progress(
+        # Stream completion message
+        self._emit_message(
             state.get('analysis_id'),
-            'synthesize_insights',
-            'completed',
-            {
-                'message': f'Created {len(state["synthesized_insights"])} narratives',
-                'narratives_count': len(state.get('synthesized_insights', []))
-            }
+            f'Created {len(state["synthesized_insights"])} business narratives.',
+            'success'
         )
 
         return state
@@ -1026,11 +961,10 @@ Return your response as a JSON array:
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'create_recommendations',
-            'running',
-            {'message': 'Creating actionable recommendations...'}
+            'Creating actionable business recommendations...',
+            'recommendation'
         )
 
         # Use synthesized insights if available, otherwise fall back to raw insights
@@ -1055,15 +989,11 @@ Return your response as a JSON array:
             if 'impact' in rec:
                 print(f"    Impact: {rec['impact']}")
 
-        # Emit progress: completed
-        self._emit_progress(
+        # Stream completion message
+        self._emit_message(
             state.get('analysis_id'),
-            'create_recommendations',
-            'completed',
-            {
-                'message': f'Created {len(state["recommendations"])} recommendations',
-                'recommendations_count': len(state.get('recommendations', []))
-            }
+            f'Created {len(state["recommendations"])} actionable recommendations.',
+            'success'
         )
 
         return state
@@ -1075,11 +1005,10 @@ Return your response as a JSON array:
         print("-" * 40)
 
         # Emit progress: starting
-        self._emit_progress(
+        self._emit_message(
             state.get('analysis_id'),
-            'generate_report',
-            'running',
-            {'message': 'Generating report and dashboard...'}
+            'Generating comprehensive report and interactive dashboard...',
+            'narrative'
         )
 
         # Get company_id and analysis_id from state
@@ -1130,16 +1059,11 @@ Return your response as a JSON array:
                 print(f"  [WARN] Dashboard generation failed: {e}")
 
         # Emit progress: completed
-        self._emit_progress(
-            state.get('analysis_id'),
-            'generate_report',
-            'completed',
-            {
-                'message': 'Report and dashboard generated',
-                'report_path': state.get('report_path'),
-                'dashboard_path': state.get('dashboard_path')
-            }
-        )
+        self._emit_message(
+                state.get('analysis_id'),
+                'Report and dashboard generation complete. Your analysis is ready!',
+                'success'
+            )
 
         return state
 

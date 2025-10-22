@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>business_discovery_unknown_company - Plotly Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* Modern B2B Dashboard Design - Professional & Clean */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f8f9fa;
+            color: #1a202c;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Header Section - Clean and Minimal */
+        header {
+            background: white;
+            padding: 32px 40px;
+            margin-bottom: 40px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        h1 {
+            color: #1a202c;
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 400;
+            margin-bottom: 24px;
+        }
+
+        /* Metadata Cards - Minimal and Professional */
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .metadata-item {
+            background: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 0;  /* Sharp edges */
+            border-left: 3px solid #3b82f6;
+        }
+
+        .metadata-label {
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .metadata-value {
+            color: #1a202c;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        /* Charts Section - Card Layout with Sharp Edges */
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        /* Chart Container - White card with sharp edges */
+        .chart-container {
+            background: white;
+            padding: 24px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0;  /* Sharp edges - no rounding */
+        }
+
+        .chart-header {
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .chart-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .chart-container h3 {
+            color: #1a202c;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .chart-type-selector,
+        .color-palette-selector {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0;  /* Sharp edges */
+            background: white;
+            color: #1a202c;
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .chart-type-selector:hover,
+        .color-palette-selector:hover {
+            border-color: #3b82f6;
+        }
+
+        .chart-type-selector:focus,
+        .color-palette-selector:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .color-palette-selector {
+            min-width: 120px;
+        }
+
+        .chart-description {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.5;
+            margin-top: 6px;
+        }
+
+        /* Plotly Chart - Sharp edges, no border inside card */
+        .plotly-chart {
+            min-height: 480px;
+            background: white;
+            border-radius: 0;  /* Sharp edges */
+            border: none;  /* No border since we're in a card */
+            padding: 0;
+        }
+
+        /* Footer - Subtle and Professional */
+        footer {
+            text-align: center;
+            color: #94a3b8;
+            margin-top: 64px;
+            padding: 24px;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Responsive Design */
+        @media (min-width: 1200px) {
+            .charts {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px 16px;
+            }
+
+            header {
+                padding: 24px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .metadata {
+                grid-template-columns: 1fr;
+            }
+
+            .charts {
+                gap: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>business_discovery_unknown_company</h1>
+            <div class="subtitle">Unknown | Data Analysis</div>
+
+            <div class="metadata">
+                <div class="metadata-item">
+                    <div class="metadata-label">Total Insights</div>
+                    <div class="metadata-value">4</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Generated</div>
+                    <div class="metadata-value">2025-10-21 13:57:41</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Visualizations</div>
+                    <div class="metadata-value">4</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="charts">
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Distribution of lifetime_value</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('1', this.value)" data-default="bar">
+                                <option value="bar" selected>Bar Chart</option>
+                                <option value="line" >Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('1', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: What are the distributions of key numerical columns such as `lifetime_value` or `engagement_score` in `customer_profiles`?</p>
+                </div>
+                <div id="chart_1" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Average Lifetime Value by Industry</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('2', this.value)" data-default="bar">
+                                <option value="bar" selected>Bar Chart</option>
+                                <option value="line" >Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('2', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: How do values in `customer_profiles.lifetime_value` or `customer_profiles.engagement_score` vary across different `customer_profiles.industry`, `customer_profiles.company_size`, or `customer_profiles.region` groups?</p>
+                </div>
+                <div id="chart_2" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Daily Revenue Trend Over Time</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('4', this.value)" data-default="line">
+                                <option value="bar" >Bar Chart</option>
+                                <option value="line" selected>Line Chart</option>
+                                <option value="scatter" >Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('4', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: What are the trends over `daily_sales_metrics.date` for `daily_sales_metrics.marketing_spend`, `daily_sales_metrics.revenue`, and `daily_sales_metrics.profit`?</p>
+                </div>
+                <div id="chart_4" class="plotly-chart"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title-row">
+                        <h3>Daily Marketing Spend vs. Revenue</h3>
+                        <div class="chart-controls">
+                            <select class="chart-type-selector" onchange="changeChartType('6', this.value)" data-default="scatter">
+                                <option value="bar" >Bar Chart</option>
+                                <option value="line" >Line Chart</option>
+                                <option value="scatter" selected>Scatter Plot</option>
+                                <option value="area" >Area Chart</option>
+                            </select>
+                            <select class="color-palette-selector" onchange="changeChartColor('6', this.value)">
+                                <option value="">Select Color</option>
+                                <option value="#3b82f6" style="background-color: #3b82f6; color: white;">Blue</option>
+                                <option value="#10b981" style="background-color: #10b981; color: white;">Green</option>
+                                <option value="#f59e0b" style="background-color: #f59e0b; color: white;">Orange</option>
+                                <option value="#ef4444" style="background-color: #ef4444; color: white;">Red</option>
+                                <option value="#8b5cf6" style="background-color: #8b5cf6; color: white;">Purple</option>
+                                <option value="#ec4899" style="background-color: #ec4899; color: white;">Pink</option>
+                                <option value="#14b8a6" style="background-color: #14b8a6; color: white;">Teal</option>
+                                <option value="#6366f1" style="background-color: #6366f1; color: white;">Indigo</option>
+                                <option value="#64748b" style="background-color: #64748b; color: white;">Gray</option>
+                                <option value="#000000" style="background-color: #000000; color: white;">Black</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="chart-description">Visualization for: Are there any relationships between `daily_sales_metrics.marketing_spend` and `daily_sales_metrics.customer_traffic` or `daily_sales_metrics.revenue`?</p>
+                </div>
+                <div id="chart_6" class="plotly-chart"></div>
+            </div>
+            
+        </div>
+
+        <footer>
+            <p>Generated with Autonomous AI Analyst | Plotly Dashboard</p>
+        </footer>
+    </div>
+
+    <script>
+        // Function to change chart type dynamically
+        function changeChartType(chartId, newType) {
+            const chartDiv = 'chart_' + chartId;
+            let update = {};
+
+            // Configure update based on chart type
+            if (newType === 'bar') {
+                update.type = 'bar';
+                update.mode = null;
+                update.fill = null;
+            } else if (newType === 'line') {
+                update.type = 'scatter';
+                update.mode = 'lines+markers';
+                update.fill = null;
+                update.line = {
+                    width: 3,
+                    shape: 'spline'
+                };
+            } else if (newType === 'scatter') {
+                update.type = 'scatter';
+                update.mode = 'markers';
+                update.fill = null;
+            } else if (newType === 'area') {
+                update.type = 'scatter';
+                update.mode = 'lines';
+                update.fill = 'tozeroy';
+                update.line = {
+                    width: 2,
+                    shape: 'spline'
+                };
+            }
+
+            // Apply the update to all traces in the chart
+            Plotly.restyle(chartDiv, update);
+        }
+
+        // Function to change chart color dynamically
+        function changeChartColor(chartId, newColor) {
+            if (!newColor) return; // Skip if "Select Color" is chosen
+
+            const chartDiv = 'chart_' + chartId;
+            const chartElement = document.getElementById(chartDiv);
+
+            // Get number of traces in the chart
+            const numTraces = chartElement.data.length;
+
+            // Update color for all traces
+            let update = {};
+
+            // For markers (all chart types)
+            update['marker.color'] = newColor;
+
+            // For line charts - update line color
+            update['line.color'] = newColor;
+
+            // Apply to all traces
+            const traceIndices = Array.from({length: numTraces}, (_, i) => i);
+            Plotly.restyle(chartDiv, update, traceIndices);
+
+            // Reset the dropdown to "Select Color"
+            event.target.value = '';
+        }
+
+        // Initialize Plotly charts
+        
+        Plotly.newPlot('chart_1', [{"x": ["1,000 - 21,822", "21,822 - 42,644", "42,644 - 63,466", "63,466 - 84,288", "84,288 - 105,110", "105,110 - 125,932", "125,932 - 146,754", "146,754 - 167,576", "167,576 - 188,398", "188,398 - 209,220"], "y": [194, 160, 2, 78, 25, 0, 0, 0, 1, 40], "type": "bar", "marker": {"color": "#764ba2", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_1", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_2', [{"x": ["Finance", "Healthcare", "Manufacturing", "Retail", "Tech"], "y": [56459.95, 54219.04, 45850.26, 43471.92, 37870.16], "type": "bar", "marker": {"color": "#4facfe", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_2", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_4', [{"x": ["2021-01-01", "2021-01-02", "2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09", "2021-01-10", "2021-01-11", "2021-01-12", "2021-01-13", "2021-01-14", "2021-01-15", "2021-01-16", "2021-01-17", "2021-01-18", "2021-01-19", "2021-01-20", "2021-01-21", "2021-01-22", "2021-01-23", "2021-01-24", "2021-01-25", "2021-01-26", "2021-01-27", "2021-01-28", "2021-01-29", "2021-01-30", "2021-01-31", "2021-02-01", "2021-02-02", "2021-02-03", "2021-02-04", "2021-02-05", "2021-02-06", "2021-02-07", "2021-02-08", "2021-02-09", "2021-02-10", "2021-02-11", "2021-02-12", "2021-02-13", "2021-02-14", "2021-02-15", "2021-02-16", "2021-02-17", "2021-02-18", "2021-02-19", "2021-02-20", "2021-02-21", "2021-02-22", "2021-02-23", "2021-02-24", "2021-02-25", "2021-02-26", "2021-02-27", "2021-02-28", "2021-03-01", "2021-03-02", "2021-03-03", "2021-03-04", "2021-03-05", "2021-03-06", "2021-03-07", "2021-03-08", "2021-03-09", "2021-03-10", "2021-03-11", "2021-03-12", "2021-03-13", "2021-03-14", "2021-03-15", "2021-03-16", "2021-03-17", "2021-03-18", "2021-03-19", "2021-03-20", "2021-03-21", "2021-03-22", "2021-03-23", "2021-03-24", "2021-03-25", "2021-03-26", "2021-03-27", "2021-03-28", "2021-03-29", "2021-03-30", "2021-03-31", "2021-04-01", "2021-04-02", "2021-04-03", "2021-04-04", "2021-04-05", "2021-04-06", "2021-04-07", "2021-04-08", "2021-04-09", "2021-04-10", "2021-04-11", "2021-04-12", "2021-04-13", "2021-04-14", "2021-04-15", "2021-04-16", "2021-04-17", "2021-04-18", "2021-04-19", "2021-04-20", "2021-04-21", "2021-04-22", "2021-04-23", "2021-04-24", "2021-04-25", "2021-04-26", "2021-04-27", "2021-04-28", "2021-04-29", "2021-04-30", "2021-05-01", "2021-05-02", "2021-05-03", "2021-05-04", "2021-05-05", "2021-05-06", "2021-05-07", "2021-05-08", "2021-05-09", "2021-05-10", "2021-05-11", "2021-05-12", "2021-05-13", "2021-05-14", "2021-05-15", "2021-05-16", "2021-05-17", "2021-05-18", "2021-05-19", "2021-05-20", "2021-05-21", "2021-05-22", "2021-05-23", "2021-05-24", "2021-05-25", "2021-05-26", "2021-05-27", "2021-05-28", "2021-05-29", "2021-05-30", "2021-05-31", "2021-06-01", "2021-06-02", "2021-06-03", "2021-06-04", "2021-06-05", "2021-06-06", "2021-06-07", "2021-06-08", "2021-06-09", "2021-06-10", "2021-06-11", "2021-06-12", "2021-06-13", "2021-06-14", "2021-06-15", "2021-06-16", "2021-06-17", "2021-06-18", "2021-06-19", "2021-06-20", "2021-06-21", "2021-06-22", "2021-06-23", "2021-06-24", "2021-06-25", "2021-06-26", "2021-06-27", "2021-06-28", "2021-06-29", "2021-06-30", "2021-07-01", "2021-07-02", "2021-07-03", "2021-07-04", "2021-07-05", "2021-07-06", "2021-07-07", "2021-07-08", "2021-07-09", "2021-07-10", "2021-07-11", "2021-07-12", "2021-07-13", "2021-07-14", "2021-07-15", "2021-07-16", "2021-07-17", "2021-07-18", "2021-07-19", "2021-07-20", "2021-07-21", "2021-07-22", "2021-07-23", "2021-07-24", "2021-07-25", "2021-07-26", "2021-07-27", "2021-07-28", "2021-07-29", "2021-07-30", "2021-07-31", "2021-08-01", "2021-08-02", "2021-08-03", "2021-08-04", "2021-08-05", "2021-08-06", "2021-08-07", "2021-08-08", "2021-08-09", "2021-08-10", "2021-08-11", "2021-08-12", "2021-08-13", "2021-08-14", "2021-08-15", "2021-08-16", "2021-08-17", "2021-08-18", "2021-08-19", "2021-08-20", "2021-08-21", "2021-08-22", "2021-08-23", "2021-08-24", "2021-08-25", "2021-08-26", "2021-08-27", "2021-08-28", "2021-08-29", "2021-08-30", "2021-08-31", "2021-09-01", "2021-09-02", "2021-09-03", "2021-09-04", "2021-09-05", "2021-09-06", "2021-09-07", "2021-09-08", "2021-09-09", "2021-09-10", "2021-09-11", "2021-09-12", "2021-09-13", "2021-09-14", "2021-09-15", "2021-09-16", "2021-09-17", "2021-09-18", "2021-09-19", "2021-09-20", "2021-09-21", "2021-09-22", "2021-09-23", "2021-09-24", "2021-09-25", "2021-09-26", "2021-09-27", "2021-09-28", "2021-09-29", "2021-09-30", "2021-10-01", "2021-10-02", "2021-10-03", "2021-10-04", "2021-10-05", "2021-10-06", "2021-10-07", "2021-10-08", "2021-10-09", "2021-10-10", "2021-10-11", "2021-10-12", "2021-10-13", "2021-10-14", "2021-10-15", "2021-10-16", "2021-10-17", "2021-10-18", "2021-10-19", "2021-10-20", "2021-10-21", "2021-10-22", "2021-10-23", "2021-10-24", "2021-10-25", "2021-10-26", "2021-10-27", "2021-10-28", "2021-10-29", "2021-10-30", "2021-10-31", "2021-11-01", "2021-11-02", "2021-11-03", "2021-11-04", "2021-11-05", "2021-11-06", "2021-11-07", "2021-11-08", "2021-11-09", "2021-11-10", "2021-11-11", "2021-11-12", "2021-11-13", "2021-11-14", "2021-11-15", "2021-11-16", "2021-11-17", "2021-11-18", "2021-11-19", "2021-11-20", "2021-11-21", "2021-11-22", "2021-11-23", "2021-11-24", "2021-11-25", "2021-11-26", "2021-11-27", "2021-11-28", "2021-11-29", "2021-11-30", "2021-12-01", "2021-12-02", "2021-12-03", "2021-12-04", "2021-12-05", "2021-12-06", "2021-12-07", "2021-12-08", "2021-12-09", "2021-12-10", "2021-12-11", "2021-12-12", "2021-12-13", "2021-12-14", "2021-12-15", "2021-12-16", "2021-12-17", "2021-12-18", "2021-12-19", "2021-12-20", "2021-12-21", "2021-12-22", "2021-12-23", "2021-12-24", "2021-12-25", "2021-12-26", "2021-12-27", "2021-12-28", "2021-12-29", "2021-12-30", "2021-12-31", "2022-01-01", "2022-01-02", "2022-01-03", "2022-01-04", "2022-01-05", "2022-01-06", "2022-01-07", "2022-01-08", "2022-01-09", "2022-01-10", "2022-01-11", "2022-01-12", "2022-01-13", "2022-01-14", "2022-01-15", "2022-01-16", "2022-01-17", "2022-01-18", "2022-01-19", "2022-01-20", "2022-01-21", "2022-01-22", "2022-01-23", "2022-01-24", "2022-01-25", "2022-01-26", "2022-01-27", "2022-01-28", "2022-01-29", "2022-01-30", "2022-01-31", "2022-02-01", "2022-02-02", "2022-02-03", "2022-02-04", "2022-02-05", "2022-02-06", "2022-02-07", "2022-02-08", "2022-02-09", "2022-02-10", "2022-02-11", "2022-02-12", "2022-02-13", "2022-02-14", "2022-02-15", "2022-02-16", "2022-02-17", "2022-02-18", "2022-02-19", "2022-02-20", "2022-02-21", "2022-02-22", "2022-02-23", "2022-02-24", "2022-02-25", "2022-02-26", "2022-02-27", "2022-02-28", "2022-03-01", "2022-03-02", "2022-03-03", "2022-03-04", "2022-03-05", "2022-03-06", "2022-03-07", "2022-03-08", "2022-03-09", "2022-03-10", "2022-03-11", "2022-03-12", "2022-03-13", "2022-03-14", "2022-03-15", "2022-03-16", "2022-03-17", "2022-03-18", "2022-03-19", "2022-03-20", "2022-03-21", "2022-03-22", "2022-03-23", "2022-03-24", "2022-03-25", "2022-03-26", "2022-03-27", "2022-03-28", "2022-03-29", "2022-03-30", "2022-03-31", "2022-04-01", "2022-04-02", "2022-04-03", "2022-04-04", "2022-04-05", "2022-04-06", "2022-04-07", "2022-04-08", "2022-04-09", "2022-04-10", "2022-04-11", "2022-04-12", "2022-04-13", "2022-04-14", "2022-04-15", "2022-04-16", "2022-04-17", "2022-04-18", "2022-04-19", "2022-04-20", "2022-04-21", "2022-04-22", "2022-04-23", "2022-04-24", "2022-04-25", "2022-04-26", "2022-04-27", "2022-04-28", "2022-04-29", "2022-04-30", "2022-05-01", "2022-05-02", "2022-05-03", "2022-05-04", "2022-05-05", "2022-05-06", "2022-05-07", "2022-05-08", "2022-05-09", "2022-05-10", "2022-05-11", "2022-05-12", "2022-05-13", "2022-05-14", "2022-05-15", "2022-05-16", "2022-05-17", "2022-05-18", "2022-05-19", "2022-05-20", "2022-05-21", "2022-05-22", "2022-05-23", "2022-05-24", "2022-05-25", "2022-05-26", "2022-05-27", "2022-05-28", "2022-05-29", "2022-05-30", "2022-05-31", "2022-06-01", "2022-06-02", "2022-06-03", "2022-06-04", "2022-06-05", "2022-06-06", "2022-06-07", "2022-06-08", "2022-06-09", "2022-06-10", "2022-06-11", "2022-06-12", "2022-06-13", "2022-06-14", "2022-06-15", "2022-06-16", "2022-06-17", "2022-06-18", "2022-06-19", "2022-06-20", "2022-06-21", "2022-06-22", "2022-06-23", "2022-06-24", "2022-06-25", "2022-06-26", "2022-06-27", "2022-06-28", "2022-06-29", "2022-06-30", "2022-07-01", "2022-07-02", "2022-07-03", "2022-07-04", "2022-07-05", "2022-07-06", "2022-07-07", "2022-07-08", "2022-07-09", "2022-07-10", "2022-07-11", "2022-07-12", "2022-07-13", "2022-07-14", "2022-07-15", "2022-07-16", "2022-07-17", "2022-07-18", "2022-07-19", "2022-07-20", "2022-07-21", "2022-07-22", "2022-07-23", "2022-07-24", "2022-07-25", "2022-07-26", "2022-07-27", "2022-07-28", "2022-07-29", "2022-07-30", "2022-07-31", "2022-08-01", "2022-08-02", "2022-08-03", "2022-08-04", "2022-08-05", "2022-08-06", "2022-08-07", "2022-08-08", "2022-08-09", "2022-08-10", "2022-08-11", "2022-08-12", "2022-08-13", "2022-08-14", "2022-08-15", "2022-08-16", "2022-08-17", "2022-08-18", "2022-08-19", "2022-08-20", "2022-08-21", "2022-08-22", "2022-08-23", "2022-08-24", "2022-08-25", "2022-08-26", "2022-08-27", "2022-08-28", "2022-08-29", "2022-08-30", "2022-08-31", "2022-09-01", "2022-09-02", "2022-09-03", "2022-09-04", "2022-09-05", "2022-09-06", "2022-09-07", "2022-09-08", "2022-09-09", "2022-09-10", "2022-09-11", "2022-09-12", "2022-09-13", "2022-09-14", "2022-09-15", "2022-09-16", "2022-09-17", "2022-09-18", "2022-09-19", "2022-09-20", "2022-09-21", "2022-09-22", "2022-09-23", "2022-09-24", "2022-09-25", "2022-09-26", "2022-09-27", "2022-09-28", "2022-09-29", "2022-09-30", "2022-10-01", "2022-10-02", "2022-10-03", "2022-10-04", "2022-10-05", "2022-10-06", "2022-10-07", "2022-10-08", "2022-10-09", "2022-10-10", "2022-10-11", "2022-10-12", "2022-10-13", "2022-10-14", "2022-10-15", "2022-10-16", "2022-10-17", "2022-10-18", "2022-10-19", "2022-10-20", "2022-10-21", "2022-10-22", "2022-10-23", "2022-10-24", "2022-10-25", "2022-10-26", "2022-10-27", "2022-10-28", "2022-10-29", "2022-10-30", "2022-10-31", "2022-11-01", "2022-11-02", "2022-11-03", "2022-11-04", "2022-11-05", "2022-11-06", "2022-11-07", "2022-11-08", "2022-11-09", "2022-11-10", "2022-11-11", "2022-11-12", "2022-11-13", "2022-11-14", "2022-11-15", "2022-11-16", "2022-11-17", "2022-11-18", "2022-11-19", "2022-11-20", "2022-11-21", "2022-11-22", "2022-11-23", "2022-11-24", "2022-11-25", "2022-11-26", "2022-11-27", "2022-11-28", "2022-11-29", "2022-11-30", "2022-12-01", "2022-12-02", "2022-12-03", "2022-12-04", "2022-12-05", "2022-12-06", "2022-12-07", "2022-12-08", "2022-12-09", "2022-12-10", "2022-12-11", "2022-12-12", "2022-12-13", "2022-12-14", "2022-12-15", "2022-12-16", "2022-12-17", "2022-12-18", "2022-12-19", "2022-12-20", "2022-12-21", "2022-12-22", "2022-12-23", "2022-12-24", "2022-12-25", "2022-12-26", "2022-12-27", "2022-12-28", "2022-12-29", "2022-12-30", "2022-12-31", "2023-01-01", "2023-01-02", "2023-01-03", "2023-01-04", "2023-01-05", "2023-01-06", "2023-01-07", "2023-01-08", "2023-01-09", "2023-01-10", "2023-01-11", "2023-01-12", "2023-01-13", "2023-01-14", "2023-01-15", "2023-01-16", "2023-01-17", "2023-01-18", "2023-01-19", "2023-01-20", "2023-01-21", "2023-01-22", "2023-01-23", "2023-01-24", "2023-01-25", "2023-01-26", "2023-01-27", "2023-01-28", "2023-01-29", "2023-01-30", "2023-01-31", "2023-02-01", "2023-02-02", "2023-02-03", "2023-02-04", "2023-02-05", "2023-02-06", "2023-02-07", "2023-02-08", "2023-02-09", "2023-02-10", "2023-02-11", "2023-02-12", "2023-02-13", "2023-02-14", "2023-02-15", "2023-02-16", "2023-02-17", "2023-02-18", "2023-02-19", "2023-02-20", "2023-02-21", "2023-02-22", "2023-02-23", "2023-02-24", "2023-02-25", "2023-02-26", "2023-02-27", "2023-02-28", "2023-03-01", "2023-03-02", "2023-03-03", "2023-03-04", "2023-03-05", "2023-03-06", "2023-03-07", "2023-03-08", "2023-03-09", "2023-03-10", "2023-03-11", "2023-03-12", "2023-03-13", "2023-03-14", "2023-03-15", "2023-03-16", "2023-03-17", "2023-03-18", "2023-03-19", "2023-03-20", "2023-03-21", "2023-03-22", "2023-03-23", "2023-03-24", "2023-03-25", "2023-03-26", "2023-03-27", "2023-03-28", "2023-03-29", "2023-03-30", "2023-03-31", "2023-04-01", "2023-04-02", "2023-04-03", "2023-04-04", "2023-04-05", "2023-04-06", "2023-04-07", "2023-04-08", "2023-04-09", "2023-04-10", "2023-04-11", "2023-04-12", "2023-04-13", "2023-04-14", "2023-04-15", "2023-04-16", "2023-04-17", "2023-04-18", "2023-04-19", "2023-04-20", "2023-04-21", "2023-04-22", "2023-04-23", "2023-04-24", "2023-04-25", "2023-04-26", "2023-04-27", "2023-04-28", "2023-04-29", "2023-04-30", "2023-05-01", "2023-05-02", "2023-05-03", "2023-05-04", "2023-05-05", "2023-05-06", "2023-05-07", "2023-05-08", "2023-05-09", "2023-05-10", "2023-05-11", "2023-05-12", "2023-05-13", "2023-05-14", "2023-05-15", "2023-05-16", "2023-05-17", "2023-05-18", "2023-05-19", "2023-05-20", "2023-05-21", "2023-05-22", "2023-05-23", "2023-05-24", "2023-05-25", "2023-05-26", "2023-05-27", "2023-05-28", "2023-05-29", "2023-05-30", "2023-05-31", "2023-06-01", "2023-06-02", "2023-06-03", "2023-06-04", "2023-06-05", "2023-06-06", "2023-06-07", "2023-06-08", "2023-06-09", "2023-06-10", "2023-06-11", "2023-06-12", "2023-06-13", "2023-06-14", "2023-06-15", "2023-06-16", "2023-06-17", "2023-06-18", "2023-06-19", "2023-06-20", "2023-06-21", "2023-06-22", "2023-06-23", "2023-06-24", "2023-06-25", "2023-06-26", "2023-06-27", "2023-06-28", "2023-06-29", "2023-06-30", "2023-07-01", "2023-07-02", "2023-07-03", "2023-07-04", "2023-07-05", "2023-07-06", "2023-07-07", "2023-07-08", "2023-07-09", "2023-07-10", "2023-07-11", "2023-07-12", "2023-07-13", "2023-07-14", "2023-07-15", "2023-07-16", "2023-07-17", "2023-07-18", "2023-07-19", "2023-07-20", "2023-07-21", "2023-07-22", "2023-07-23", "2023-07-24", "2023-07-25", "2023-07-26", "2023-07-27", "2023-07-28", "2023-07-29", "2023-07-30", "2023-07-31", "2023-08-01", "2023-08-02", "2023-08-03", "2023-08-04", "2023-08-05", "2023-08-06", "2023-08-07", "2023-08-08", "2023-08-09", "2023-08-10", "2023-08-11", "2023-08-12", "2023-08-13", "2023-08-14", "2023-08-15", "2023-08-16", "2023-08-17", "2023-08-18", "2023-08-19", "2023-08-20", "2023-08-21", "2023-08-22", "2023-08-23", "2023-08-24", "2023-08-25", "2023-08-26", "2023-08-27", "2023-08-28", "2023-08-29", "2023-08-30", "2023-08-31", "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", "2023-09-11", "2023-09-12", "2023-09-13", "2023-09-14", "2023-09-15", "2023-09-16", "2023-09-17", "2023-09-18", "2023-09-19", "2023-09-20", "2023-09-21", "2023-09-22", "2023-09-23", "2023-09-24", "2023-09-25", "2023-09-26", "2023-09-27", "2023-09-28", "2023-09-29", "2023-09-30", "2023-10-01", "2023-10-02", "2023-10-03", "2023-10-04", "2023-10-05", "2023-10-06", "2023-10-07", "2023-10-08", "2023-10-09", "2023-10-10", "2023-10-11", "2023-10-12", "2023-10-13", "2023-10-14", "2023-10-15", "2023-10-16", "2023-10-17", "2023-10-18", "2023-10-19", "2023-10-20", "2023-10-21", "2023-10-22", "2023-10-23", "2023-10-24", "2023-10-25", "2023-10-26", "2023-10-27", "2023-10-28", "2023-10-29", "2023-10-30", "2023-10-31", "2023-11-01", "2023-11-02", "2023-11-03", "2023-11-04", "2023-11-05", "2023-11-06", "2023-11-07", "2023-11-08", "2023-11-09", "2023-11-10", "2023-11-11", "2023-11-12", "2023-11-13", "2023-11-14", "2023-11-15", "2023-11-16", "2023-11-17", "2023-11-18", "2023-11-19", "2023-11-20", "2023-11-21", "2023-11-22", "2023-11-23", "2023-11-24", "2023-11-25", "2023-11-26", "2023-11-27", "2023-11-28", "2023-11-29", "2023-11-30", "2023-12-01", "2023-12-02", "2023-12-03", "2023-12-04", "2023-12-05", "2023-12-06", "2023-12-07", "2023-12-08", "2023-12-09", "2023-12-10", "2023-12-11", "2023-12-12", "2023-12-13", "2023-12-14", "2023-12-15", "2023-12-16", "2023-12-17", "2023-12-18", "2023-12-19", "2023-12-20", "2023-12-21", "2023-12-22", "2023-12-23", "2023-12-24", "2023-12-25", "2023-12-26", "2023-12-27", "2023-12-28", "2023-12-29", "2023-12-30", "2023-12-31"], "y": [24913.57, 25277.27, 20743.6, 27037.66, 25532.98, 26976.02, 19082.49, 47081.0, 42443.91, 46669.89, 44005.53, 44525.71, 41078.14, 44815.45, 49294.92, 41955.21, 44906.58, 44550.24, 44951.0, 45562.21, 42122.59, 46951.75, 43221.53, 43692.36, 47605.28, 46192.02, 45118.04, 49047.85, 43108.86, 49468.93, 40646.24, 45512.58, 44162.65, 42736.04, 47659.33, 46256.02, 46942.17, 47791.85, 50678.81, 45195.38, 47685.73, 50307.35, 43176.8, 49277.45, 44872.81, 43967.26, 50823.5, 48219.69, 48347.44, 47050.76, 46550.38, 42132.01, 44091.88, 50308.26, 48173.95, 47342.87, 41652.49, 47692.91, 45126.53, 51047.74, 51183.89, 49381.04, 55325.72, 49817.77, 46892.55, 44313.41, 55024.47, 45669.22, 45921.42, 50210.02, 51944.59, 53400.02, 53580.5, 50766.06, 53697.48, 51935.66, 48537.39, 49897.4, 51549.07, 48551.73, 52592.32, 42806.79, 51544.12, 48661.34, 46907.97, 49889.48, 49699.05, 51643.16, 47531.03, 50808.73, 51154.3, 47286.4, 49348.87, 53006.68, 49095.11, 49570.47, 48025.71, 49364.89, 51648.07, 46112.88, 49697.52, 49390.47, 48074.17, 51179.23, 53084.62, 49353.64, 48808.1, 47316.79, 50599.67, 49275.75, 48617.03, 47544.12, 48755.64, 49897.45, 53822.48, 48350.27, 104392.33375254904, 45197.1, 50065.24, 48270.84, 55628.59, 46889.46, 49487.97, 47608.61, 51211.52, 48831.1, 51230.44, 51673.94, 48389.06, 50806.65, 45382.55, 50261.83, 51791.95, 48201.13, 51739.71, 46925.68, 44415.93, 45450.5, 53543.01, 44093.9, 51787.79, 83622.556679541, 49613.45, 48477.55, 50874.37, 48741.4, 44158.56, 46942.11, 47467.04, 42758.02, 45014.53, 47960.9, 46948.88, 44640.29, 41630.64, 47843.34, 48789.04, 42696.38, 47547.3, 47854.81, 43577.51, 50843.44, 44592.69, 47373.49, 46624.03, 44945.53, 46776.3, 44768.19, 45067.89, 47478.01, 41562.49, 46913.44, 44282.91, 44318.82, 50490.34, 46239.04, 43936.78, 40882.61, 42014.42, 46866.88, 44496.5, 50039.11, 45745.41, 44382.82, 46091.02, 43193.96, 48464.72, 45389.75, 44541.18, 39870.91, 41102.96, 38916.78, 45709.94, 41280.17, 38054.88, 41962.88, 44437.28, 42723.55, 45412.81, 43395.72, 40085.1, 43924.95, 42288.61, 41499.35, 42860.55, 41331.04, 42386.87, 42552.26, 40984.47, 44101.97, 41345.38, 39278.69, 40084.48, 43393.27, 43185.56, 42205.83, 49455.54, 45581.08, 44409.05, 43386.72, 39393.86, 38717.53, 42414.91, 38914.2, 39441.67, 39869.2, 41714.09, 44793.15, 38646.79, 41465.37, 33777.24, 36766.83, 42780.85, 37844.49, 39719.29, 42000.38, 44513.76, 37164.32, 43613.15, 40564.68, 38174.01, 43585.65, 40238.26, 36223.0, 40991.24, 39924.15, 41282.28, 39230.98, 42830.41, 43089.96, 37860.94, 32607.2, 41560.08, 75707.20208032284, 38155.61, 39383.21, 37460.47, 38370.34, 42228.22, 41270.52, 37167.08, 36465.0, 39988.1, 40138.16, 39650.67, 41778.41, 42063.02, 38868.85, 37441.01, 36933.27, 38120.17, 40202.39, 36389.47, 42731.95, 36568.15, 40484.8, 44054.8, 39909.38, 35025.99, 45265.23, 41069.66, 80622.38731571048, 43429.64, 39775.99, 43884.78, 42371.97, 39056.22, 46428.55, 91875.8853647888, 45472.5, 40008.76, 46832.75, 41319.97, 40704.65, 41428.68, 42488.84, 39524.72, 45906.66, 41600.13, 40189.99, 43636.87, 66815.71552921538, 39616.66, 45735.68, 40889.05, 41919.69, 44108.53, 42857.82, 42224.92, 45623.75, 42156.39, 39965.93, 46484.77, 44739.32, 41330.15, 46560.49, 44141.2, 44380.59, 49611.05, 43305.31, 46248.1, 45229.52, 44548.16, 48264.06, 44572.06, 45480.03, 46606.33, 43272.92, 44006.29, 40712.85, 43765.53, 47081.68, 40397.8, 46373.46, 45572.24, 46479.61, 48806.72, 47264.11, 42688.07, 45008.52, 45126.74, 46803.01, 48394.39, 44903.24, 46472.85, 46159.24, 47252.29, 44556.7, 44598.66, 47296.88, 43362.48, 44329.9, 47384.92, 46593.69, 44231.41, 46433.44, 49315.52, 47812.2, 53959.21, 49928.63, 43488.37, 48841.57, 46214.73, 50042.87, 49016.14, 47602.14, 43717.59, 47574.34, 48254.6, 46491.89, 50308.41, 52375.86, 48005.56, 45913.79, 48839.65, 50987.55, 45030.87, 48842.81, 49073.42, 49911.68, 50996.49, 52591.39, 48640.18, 48824.03, 47901.57, 54425.4, 46340.79, 51022.51, 47901.6, 46433.63, 50322.01, 44782.02, 46563.63, 47123.1, 54278.54, 50642.74, 113505.55248456668, 47716.93, 50558.85, 49123.26, 57351.54, 56385.44, 50862.46, 48729.51, 55155.48, 51478.39, 51756.03, 45629.83, 48329.17, 50066.08, 49574.53, 50984.48, 53569.49, 49115.95, 53350.92, 48058.68, 51564.95, 49688.07, 44163.47, 48451.78, 53220.31, 54591.2, 50303.23, 51395.12, 54900.91, 54861.22, 52101.59, 54700.18, 53121.13, 49893.11, 55569.69, 55282.95, 57182.06, 48328.9, 50539.97, 53459.65, 45521.6, 49636.15, 47969.5, 49996.25, 49546.07, 55144.65, 50239.69, 52121.32, 43440.55, 48732.0, 55151.46, 56068.51, 51180.69, 46351.36, 52930.59, 46848.09, 53800.34, 54224.16, 51603.61, 50702.5, 49267.1, 49521.86, 52463.15, 49268.78, 52988.36, 52714.0, 49127.58, 54504.65, 50006.22, 51030.52, 47091.87, 50096.26, 53313.6, 52248.75, 50255.62, 52958.9, 52652.82, 49756.94, 52582.84, 53546.99, 48625.59, 52276.12, 85239.98737268368, 49879.08, 53737.53, 50877.7, 53178.94, 50479.59, 50482.05, 56528.65, 55916.17, 49272.86, 50051.82, 49292.9, 54768.3, 51178.39, 47602.84, 48754.5, 49379.76, 51681.06, 46389.34, 52408.35, 55365.68, 47179.88, 48229.82, 55825.23, 55838.24, 49644.04, 49679.81, 48985.88, 51037.78, 52199.6, 52890.46, 47909.93, 49640.9, 49437.46, 53024.96, 50423.84, 48297.97, 50310.24, 45351.73, 52424.17, 50802.51, 50197.52, 55244.28, 49683.25, 49871.41, 50369.08, 51402.71, 51322.49, 48610.32, 48723.06, 50094.06, 52479.2, 53167.92, 48660.39, 50005.08, 47514.38, 51261.29, 51594.77, 47284.22, 49628.15, 49772.75, 49762.65, 47768.21, 46920.41, 51002.74, 53062.83, 47106.09, 51208.93, 51194.47, 50982.66, 47801.95, 48206.11, 53357.51, 43592.79, 50688.58, 53245.5, 53848.8, 51287.92, 48762.94, 50272.84, 48588.08, 51051.85, 49130.24, 49763.24, 50849.82, 45619.13, 51198.66, 52601.01, 47369.54, 44262.03, 50846.52, 52910.62, 48033.24, 49215.81, 47111.83, 46993.73, 47842.72, 43856.38, 46814.61, 47992.98, 49234.66, 52180.68, 46892.47, 51404.72, 47101.2, 50511.83, 48059.23, 45959.74, 49300.12, 47114.87, 47500.66, 47162.65, 54752.97, 46949.38, 47889.43, 46233.74, 44730.3, 49372.1, 45633.97, 49277.09, 43974.78, 47248.06, 51089.4, 47449.32, 45044.05, 47591.53, 46002.42, 47776.12, 48523.5, 49587.71, 47624.08, 50426.09, 47691.94, 49229.47, 53809.99, 45412.77, 42257.62, 45760.22, 49381.48, 44975.68, 48586.54, 45552.74, 44163.67, 51210.67, 46177.5, 47885.87, 47176.25, 47613.18, 46757.43, 46670.02, 47999.02, 47634.86, 51584.12, 48320.8, 46944.64, 45080.93, 49670.94, 45553.35, 46303.57, 44142.85, 48251.54, 47608.79, 42061.54, 41809.99, 40920.81, 48574.03, 50709.4, 42927.09, 42879.51, 45322.7, 51872.99, 43674.25, 43200.82, 48112.83, 46856.85, 41892.54, 48222.55, 41343.95, 49624.28, 83793.39793887445, 45086.22, 46713.04, 47033.8, 49359.6, 47910.22, 48835.98, 49002.36, 50175.5, 46216.19, 45173.63, 42449.29, 45420.78, 43809.15, 49368.88, 46123.21, 45799.57, 49286.35, 41067.79, 51859.77, 47170.98, 42943.83, 43982.15, 42866.77, 43171.48, 44765.51, 42927.5, 48486.34, 45185.82, 48577.55, 45595.74, 46111.4, 46005.13, 44006.63, 43831.47, 46786.43, 46221.23, 48954.94, 44421.36, 47948.62, 46538.72, 50557.73, 46347.26, 46204.12, 47648.35, 45144.01, 49475.63, 45677.02, 53985.06, 47013.32, 45445.01, 46439.04, 42456.67, 41173.03, 45237.5, 49227.22, 43363.65, 52785.89, 81022.68995971659, 51830.33, 51231.49, 49512.53, 46888.25, 47851.3, 44377.41, 49186.49, 48464.15, 47218.03, 48008.71, 48430.08, 49083.73, 44226.0, 83245.12252662698, 51167.05, 48695.27, 51876.69, 48616.73, 50147.56, 50388.45, 49691.05, 51790.7, 47998.83, 49916.3, 47165.13, 49500.04, 111568.46085487083, 50742.3, 52138.55, 52901.74, 48554.61, 46452.85, 48896.65, 50244.57, 49276.33, 55025.72, 48457.98, 53857.7, 50205.54, 49226.12, 52992.86, 48125.61, 50990.51, 51929.57, 52281.76, 53559.94, 56894.71, 53609.85, 53773.58, 50868.34, 55460.11, 53250.67, 49969.84, 60233.73, 50727.49, 56831.73, 54567.21, 50879.25, 55326.81, 50272.13, 56497.9, 55867.7, 54368.44, 57147.98, 58715.16, 53110.75, 51069.6, 49744.48, 52825.74, 56855.74, 58733.13, 52526.38, 50949.44, 54999.66, 56825.66, 53860.67, 57756.91, 55330.01, 56457.59, 57366.01, 52039.38, 54622.93, 55837.4, 56149.64, 53063.34, 53378.41, 61031.94, 57411.61, 57376.6, 56797.92, 55611.96, 60582.39, 55940.5, 57456.59, 56476.64, 52858.78, 54335.53, 54628.72, 55512.12, 62501.34, 60528.94, 57962.62, 57050.81, 56697.31, 56457.87, 57394.88, 53707.23, 58047.09, 114348.69471403609, 54231.53, 61624.26, 54429.27, 60209.46, 66023.88, 55445.39, 51523.84, 59828.83, 63145.4, 61196.19, 55108.78, 58725.65, 54572.6, 56060.56, 61099.09, 54734.09, 58664.97, 59466.44, 137088.3195974527, 132295.5386794393, 60084.77, 56925.32, 58970.3, 59112.2, 58083.61, 59166.35, 59631.53, 58612.55, 60964.26, 62680.52, 54703.44, 59217.78, 56017.48, 56114.72, 56406.13, 63059.75, 56055.52, 63897.26, 59209.36, 59962.34, 57100.47, 59534.9, 58746.81, 57144.4, 62096.74, 60874.05, 56263.59, 56747.03, 57289.79, 60327.35, 59613.17, 55228.72, 58380.76, 55882.03, 56213.31, 56172.34, 59346.76, 62664.1, 55193.14, 59180.69, 54937.27, 57123.29, 60089.22, 57258.16, 58473.22, 60492.26, 60861.9, 60516.36, 56869.36, 56738.05, 59659.3, 59269.9, 59660.42, 58316.17, 58925.96, 60101.98, 58849.69, 55953.51, 55666.06, 55473.81, 56774.72, 53391.47, 55371.61, 53927.81, 52160.68, 58801.75, 55824.74, 52859.82, 53546.13, 58812.97, 52700.74, 57075.79, 52977.85, 53427.61, 56708.42, 56645.09, 53420.59, 51081.2, 56679.63, 51687.48, 53742.63, 54588.21, 57828.93, 48754.9, 47153.06, 52347.58, 59548.47, 52539.77, 52560.36, 52268.08, 57042.63, 49894.49, 52476.14, 56706.85, 52254.65, 54074.57, 53143.49, 50728.16, 50248.04, 49680.11, 50808.82, 49609.53, 48390.87, 53541.17, 49988.5, 53070.6, 54276.54, 49306.49, 48246.36, 49591.31, 52103.03, 49120.95, 48448.66, 50329.35, 45908.39, 50674.02, 49341.38, 52984.31, 50888.89, 50980.31, 53408.62, 50160.5, 50510.61, 50743.81, 50434.36, 49846.63, 44539.6, 51645.03, 51475.53, 53894.4, 51398.71, 48170.75, 48899.29, 47182.36, 48918.49, 46957.88, 49203.64, 47766.16, 47043.21, 43281.42, 44944.17, 51625.86, 46699.37, 44219.76, 46266.38, 45078.29, 46595.65, 45267.03, 49792.16, 52722.51, 48664.97, 49933.65, 48453.73, 42394.47, 49282.88, 46250.79, 47149.03, 44761.92, 48714.2, 50997.76, 47570.06, 47667.57, 47743.61, 50984.0, 44413.07, 49579.83, 47282.91, 49799.84, 48772.56, 49406.44, 48958.87, 46676.55, 50586.04, 45246.69, 53141.68, 45065.41, 50299.79, 46569.35, 41756.24, 46352.74, 52308.43, 49619.03, 49564.19, 46519.7, 48759.96, 52820.52, 48690.02, 50948.24, 50327.33, 49736.96, 50773.04, 46615.08, 48525.76, 46660.16, 48149.59, 48813.27, 47646.22, 55267.14, 44359.18, 43513.96, 50229.45, 51673.08, 52620.46, 48721.03, 50062.96, 52165.73, 45872.41, 49714.82, 50630.74, 44262.03, 51981.87, 55866.39, 49795.07, 51677.9, 48769.93, 49487.06, 48639.09, 48541.65, 53131.86, 54542.77, 49726.24, 50390.95, 54567.96, 48906.8, 56034.11, 46390.05, 49606.6, 48306.63, 48761.84, 55624.83, 54152.64, 52562.39, 51688.22, 53296.1, 51165.26, 54848.86, 51917.64, 53239.9, 54273.18, 51735.36, 55823.63, 54637.23, 53005.55, 55958.59, 49195.47, 61716.52, 52404.39, 54557.03, 55356.36, 56311.14], "type": "scatter", "mode": "lines+markers", "marker": {"color": "#fa709a", "size": 8, "line": {"color": "white", "width": 2}}, "line": {"color": "#fa709a", "width": 3, "shape": "spline"}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_4", "height": 800, "width": 1200, "scale": 2}});
+         
+        Plotly.newPlot('chart_6', [{"x": [5248.36, 4959.45, 5381.01, 5847.24, 4997.19, 5025.71, 5960.85, 5583.39, 4993.31, 5527.63, 5052.89, 5079.89, 5461.82, 4412.19, 4534.26, 5143.36, 4945.76, 5636.85, 5053.13, 4828.28, 6294.4, 5475.68, 5649.16, 4929.69, 5396.37, 5750.34, 5145.52, 5934.8, 5472.37, 5652.38, 5522.69, 6774.78, 5866.77, 5369.3, 6333.83, 5336.29, 6075.04, 5014.42, 5353.54, 6139.17, 6432.8, 6171.8, 6050.54, 5979.78, 5412.73, 5813.42, 5964.07, 6743.68, 6407.33, 5374.08, 6437.38, 6102.2, 5975.35, 6638.36, 6866.38, 6834.53, 5966.92, 6249.2, 6586.35, 6925.02, 6213.82, 6376.35, 5931.39, 5901.45, 6920.42, 7206.48, 6506.16, 7057.33, 6749.37, 6258.57, 6774.0, 7374.07, 6598.47, 7409.62, 5327.91, 7058.8, 6701.01, 6517.18, 6721.34, 5690.01, 6581.86, 6877.72, 7445.14, 6453.64, 6314.68, 6473.75, 7187.59, 6899.09, 6474.2, 6999.65, 6795.04, 7233.86, 6401.1, 6590.45, 6559.93, 6025.48, 6906.12, 6888.95, 6760.91, 6640.55, 6049.2, 6545.16, 6582.3, 6350.24, 6668.03, 6947.55, 7685.05, 6825.23, 6862.29, 6691.43, 5763.98, 6704.4, 6741.64, 7936.6, 6601.84, 6841.42, 6665.52, 6090.35, 7237.51, 7033.08, 7043.25, 6183.27, 7329.21, 5916.34, 6899.77, 7690.27, 6088.11, 6288.19, 6608.76, 6294.44, 5757.73, 6553.88, 5974.64, 6728.44, 6017.45, 7237.32, 6055.59, 6270.74, 6822.76, 5784.49, 6497.28, 7020.44, 5546.17, 6424.97, 6445.07, 6688.23, 5660.78, 5600.69, 6503.31, 6372.0, 6329.67, 6358.34, 5825.56, 6261.94, 6272.37, 5748.47, 7018.15, 6301.59, 5448.25, 6351.23, 5514.48, 6374.07, 6538.37, 5527.12, 6397.4, 6100.21, 6282.82, 6798.04, 5704.69, 5428.14, 5337.78, 5352.07, 5698.77, 5885.16, 5830.13, 6082.51, 5652.49, 6349.79, 5467.68, 6937.05, 5866.72, 5102.22, 4972.25, 5725.83, 5349.77, 5795.42, 5651.97, 5355.9, 4945.92, 4588.94, 5100.2, 5728.81, 5384.87, 4632.25, 5319.09, 5402.62, 4745.59, 5242.04, 5172.06, 4549.37, 5277.76, 5357.42, 5596.84, 5560.66, 4323.52, 4522.21, 5227.57, 5206.05, 5185.97, 6834.29, 5173.05, 5435.27, 5324.58, 5153.58, 4650.79, 5168.67, 4383.78, 4633.03, 4490.26, 4755.63, 5854.04, 3745.37, 5004.69, 3838.05, 4391.57, 5155.44, 4626.82, 4039.84, 4205.39, 4887.5, 4167.49, 4626.2, 4526.39, 4163.77, 5547.84, 4779.49, 3436.96, 4530.12, 4093.72, 4838.91, 4004.89, 4332.61, 4631.67, 4801.64, 3758.58, 4181.84, 4102.37, 4004.33, 5205.27, 4516.98, 3676.41, 4758.54, 5353.87, 4802.62, 3520.71, 4032.71, 4903.14, 3911.13, 4482.58, 4644.12, 3789.91, 4220.61, 2627.18, 3733.49, 4117.71, 3618.86, 5058.15, 3526.5, 4021.63, 4307.54, 4963.77, 3526.6, 4827.97, 4253.8, 3760.67, 4485.67, 4357.78, 3962.22, 4301.75, 4079.16, 4333.98, 4614.14, 5082.38, 3677.19, 5369.79, 3334.84, 4243.04, 4621.57, 4476.83, 4034.33, 4251.4, 4119.16, 4081.61, 4812.14, 4577.32, 4064.25, 4872.81, 4589.38, 4855.29, 4777.21, 4061.83, 4210.58, 4879.05, 4825.71, 4525.59, 4610.6, 5207.05, 4289.09, 4875.46, 4518.21, 4528.23, 5204.59, 5086.39, 5099.26, 5364.43, 4741.71, 5092.04, 4616.11, 4953.84, 4747.52, 4882.24, 5152.77, 4467.85, 5945.21, 4418.36, 4336.92, 5545.99, 5385.96, 5325.66, 5351.5, 5055.19, 4636.92, 5147.93, 4796.17, 5647.26, 5111.34, 4797.51, 5075.17, 5468.14, 5005.81, 4902.76, 5462.09, 5489.29, 5140.06, 5184.9, 5563.48, 4750.61, 4798.25, 5170.22, 5450.31, 5740.2, 6350.24, 6069.32, 5588.54, 5687.11, 5223.55, 5743.82, 5637.08, 5971.16, 5424.62, 6126.4, 6661.61, 5869.41, 6153.22, 6326.01, 5808.92, 6150.16, 6072.98, 6144.08, 5737.27, 6164.53, 6429.73, 6934.71, 6717.12, 7342.37, 5910.32, 6758.29, 6441.85, 7473.04, 6001.85, 6013.88, 6161.68, 5426.93, 6253.38, 6163.93, 6645.78, 6768.41, 7562.39, 7126.13, 6388.91, 6254.41, 6975.64, 6095.44, 7696.96, 7396.41, 6597.35, 6000.39, 7558.69, 6849.05, 7549.54, 6157.49, 6678.83, 7004.7, 7048.85, 6823.35, 7382.54, 6559.75, 7044.53, 7197.73, 7416.36, 7536.2, 6639.01, 6454.9, 7881.09, 7428.37, 6907.6, 8076.71, 7377.92, 7928.33, 7390.68, 8405.18, 8270.0, 7285.01, 7912.06, 7765.37, 8143.02, 6991.89, 7832.63, 8033.68, 6639.57, 6941.38, 6527.06, 7425.23, 7931.56, 8336.41, 7634.31, 8423.19, 6930.02, 6779.15, 7613.42, 7843.14, 7644.25, 6635.94, 7633.73, 7034.25, 8029.07, 7884.86, 7238.5, 7457.94, 7191.27, 7695.09, 8209.12, 7243.35, 7992.47, 7479.1, 7351.12, 7696.94, 7235.28, 7478.07, 7157.51, 8739.92, 7775.86, 7408.59, 7865.22, 7701.41, 7645.98, 8062.01, 8131.7, 7485.27, 7459.76, 7606.86, 6589.7, 6978.92, 8415.37, 8549.42, 7596.99, 8003.94, 7865.01, 9242.15, 8255.4, 7624.14, 7202.42, 6868.65, 7764.88, 7275.86, 6933.4, 7311.34, 7083.56, 8457.24, 8043.44, 7587.21, 8319.38, 7605.93, 7124.08, 8303.41, 7798.07, 6996.41, 7405.95, 7049.05, 6780.87, 7920.44, 8396.81, 6727.26, 7692.16, 7069.18, 7134.46, 7065.05, 6912.19, 7351.1, 6893.75, 7426.56, 7248.05, 7135.28, 6782.3, 6928.78, 7575.71, 7429.09, 6670.23, 7188.84, 7494.82, 6264.17, 7350.1, 6726.46, 7322.24, 6634.3, 6092.3, 6159.62, 6975.93, 7060.09, 6456.27, 7205.79, 6033.66, 6809.2, 6214.43, 6471.61, 6798.73, 6322.22, 6537.47, 7210.14, 6395.72, 7079.13, 6073.49, 6880.26, 7313.11, 5333.45, 6147.75, 6811.64, 6398.48, 6662.47, 6151.81, 6474.02, 6329.83, 6968.54, 6488.87, 6507.52, 6109.89, 6049.2, 6053.97, 6444.8, 6014.48, 6347.35, 7217.76, 6593.32, 5972.56, 6714.12, 5887.54, 5050.71, 5544.07, 5091.21, 5829.5, 5993.28, 6801.28, 6105.69, 5812.03, 6315.83, 4775.3, 5978.63, 6226.42, 5082.08, 6373.86, 5952.08, 5556.27, 6061.64, 6862.17, 5799.6, 5814.89, 5443.48, 5230.89, 6053.92, 5193.94, 5641.28, 5350.5, 5812.94, 5724.73, 6061.42, 5272.73, 5378.21, 5009.5, 5262.82, 5660.04, 5836.65, 4984.19, 5867.56, 6098.42, 5615.52, 6335.78, 4999.44, 4753.34, 4476.02, 6103.5, 5673.15, 5309.06, 5468.11, 4757.07, 6534.77, 5369.0, 5351.99, 5653.49, 5524.85, 5390.44, 4877.83, 5503.8, 6204.5, 5932.05, 6052.21, 4996.72, 4754.67, 5184.16, 5272.94, 5790.63, 4396.2, 6006.54, 5162.54, 5028.33, 4736.39, 4416.12, 5656.69, 5283.76, 4604.57, 4604.9, 5087.88, 6094.07, 5133.99, 4516.88, 5150.69, 5142.76, 3936.68, 5264.42, 5182.98, 5653.87, 6238.0, 5885.0, 5195.9, 4786.14, 6635.57, 5388.42, 5376.12, 5367.87, 5490.16, 5330.55, 5127.93, 5153.78, 5423.69, 5181.61, 5110.57, 5534.28, 5368.04, 6262.39, 4200.17, 6087.05, 6180.36, 4537.03, 5419.17, 5421.95, 4921.43, 5254.17, 5106.03, 6556.05, 6166.7, 6353.93, 6098.62, 5193.23, 5515.79, 6043.35, 5208.54, 6197.35, 5742.25, 5696.87, 6261.92, 6151.02, 5771.14, 6554.3, 5457.39, 6329.45, 6341.84, 5914.59, 6256.75, 5492.69, 6605.05, 6075.61, 5931.95, 6743.28, 5892.27, 5566.09, 5518.07, 6625.65, 5708.87, 7253.09, 5361.51, 7277.64, 6562.01, 6435.39, 6238.66, 6738.19, 6547.44, 7145.66, 6678.98, 6724.97, 6496.06, 6677.54, 6888.13, 5907.43, 6116.77, 7190.9, 6933.16, 6784.23, 6913.97, 7107.1, 6692.01, 6601.32, 7116.98, 6558.45, 7280.33, 6253.46, 7647.85, 7398.06, 7318.22, 7709.94, 8079.66, 7782.37, 6382.94, 6691.7, 7047.1, 7400.48, 7674.09, 7080.09, 7563.94, 7120.33, 7219.59, 6849.21, 7117.97, 6930.63, 7145.26, 8186.57, 7211.43, 9028.52, 7984.99, 7856.55, 7360.56, 8165.29, 7552.48, 7926.26, 9170.01, 7866.42, 8513.32, 7611.09, 7968.91, 8895.27, 7719.58, 8962.21, 8432.5, 7819.75, 8439.25, 8631.08, 8477.17, 7402.3, 7844.67, 8105.0, 8211.72, 8579.13, 8377.16, 7639.82, 8516.42, 8650.1, 8642.82, 8921.08, 8815.05, 8644.71, 8396.7, 7617.58, 8678.77, 8583.32, 8630.39, 7870.96, 7983.14, 9064.18, 8531.36, 8905.02, 8591.15, 8604.17, 9070.32, 8354.63, 8671.77, 8403.2, 8427.29, 8499.73, 8774.73, 8433.21, 9308.94, 8241.81, 8603.29, 8484.03, 9434.12, 8815.2, 9238.7, 7985.41, 8866.68, 9182.49, 8782.9, 9278.13, 8489.93, 9455.99, 9903.06, 8574.04, 8534.12, 9484.53, 9548.14, 8497.0, 8547.97, 8616.36, 8083.78, 8294.99, 8250.12, 8365.72, 8729.28, 8860.3, 9514.58, 8235.86, 9222.48, 8618.18, 8694.87, 9051.02, 8145.85, 8891.59, 8776.38, 8931.74, 8822.05, 9896.66, 8341.29, 8385.41, 8329.7, 8353.5, 8302.13, 9204.53, 9309.11, 8301.93, 8159.21, 8798.82, 8274.36, 8853.94, 8625.59, 7752.56, 9270.15, 9379.97, 8160.93, 8258.45, 8579.89, 8588.52, 8734.59, 9394.14, 8283.99, 7956.45, 7648.78, 7955.54, 8286.72, 9182.58, 8008.26, 8360.45, 8221.6, 8805.01, 9455.04, 7906.68, 7907.7, 8654.6, 8453.35, 9015.43, 8363.52, 7871.2, 8325.28, 8563.23, 8397.88, 8219.88, 8478.02, 8507.62, 8592.21, 8203.5, 7773.48, 7908.17, 8415.74, 7381.57, 7951.84, 7548.21, 7736.54, 8338.62, 7772.09, 7676.86, 6950.75, 7980.81, 7907.39, 8643.21, 7384.61, 7624.98, 7616.99, 8257.93, 7398.46, 7562.55, 7703.94, 7470.28, 7130.79, 7428.13, 7845.03, 6772.16, 7329.17, 6889.97, 7814.98, 6433.39, 6893.15, 7338.96, 7910.97, 7073.31, 6806.69, 8003.12, 6316.92, 5920.07, 7218.19, 6726.02, 6445.48, 7289.5, 7036.64, 6612.31, 6234.01, 7290.42, 7159.53, 6765.3, 7718.89, 6241.45, 5994.9, 6393.12, 6697.95, 6824.35, 6564.26, 6843.37, 6024.32, 7355.01, 6575.38, 7158.72, 6755.36, 6796.61, 6837.66, 6761.5, 6844.19, 7172.93, 6592.47, 6834.9, 6422.07, 7173.88, 6102.87, 7329.13, 6396.55, 5689.57, 6457.71, 6042.21, 6792.51, 6035.72, 6129.17, 5398.11, 6107.74, 5113.37, 5525.18, 6689.56, 6694.88, 6507.75, 5804.99, 6258.49, 6274.84, 5692.17, 7018.19, 6700.74, 6147.57, 6267.91, 6355.52, 5227.75, 6122.76, 5903.52, 5742.31, 6101.61, 7140.49, 6562.0, 5956.35, 6529.05, 6943.7, 6708.04, 6277.68, 5926.99, 6602.61, 6453.73, 6708.51, 6582.88, 6794.88, 6007.75, 6939.77, 6386.02, 7331.44, 5956.24, 7176.28, 6415.16, 5998.83, 6091.37, 6182.34, 6564.23, 6623.63, 6085.85, 6371.44, 7466.08, 7270.47, 6637.03, 6450.45, 6504.45, 6764.6, 5960.24, 6357.15, 5666.15, 6715.05, 6854.42, 6305.0, 7349.74, 5966.4, 5864.0, 6725.69, 7154.66, 7491.08, 6438.04, 7225.53, 6686.0, 6638.35, 7186.23, 7090.64, 5996.69, 7543.88, 7516.7, 6535.23, 7067.57, 7138.65, 7044.22, 6661.28, 6623.45, 6969.59, 7592.11, 7301.19, 6867.98, 7463.29, 5677.57, 7700.86, 6281.5, 6995.23, 6641.94, 6579.97, 7833.46, 7045.13, 7478.37, 7307.98, 7596.45, 7423.01, 6769.94, 7936.56, 7218.69, 6714.56, 7306.22, 8298.2, 8000.61, 7428.95, 7456.54, 7498.34, 8725.61, 7906.37, 7958.67, 8287.1, 7919.72, 7699.23, 7759.05, 7849.93, 7895.66, 8306.65, 7997.39, 8366.32], "y": [24913.57, 25277.27, 20743.6, 27037.66, 25532.98, 26976.02, 19082.49, 47081.0, 42443.91, 46669.89, 44005.53, 44525.71, 41078.14, 44815.45, 49294.92, 41955.21, 44906.58, 44550.24, 44951.0, 45562.21, 42122.59, 46951.75, 43221.53, 43692.36, 47605.28, 46192.02, 45118.04, 49047.85, 43108.86, 49468.93, 40646.24, 45512.58, 44162.65, 42736.04, 47659.33, 46256.02, 46942.17, 47791.85, 50678.81, 45195.38, 47685.73, 50307.35, 43176.8, 49277.45, 44872.81, 43967.26, 50823.5, 48219.69, 48347.44, 47050.76, 46550.38, 42132.01, 44091.88, 50308.26, 48173.95, 47342.87, 41652.49, 47692.91, 45126.53, 51047.74, 51183.89, 49381.04, 55325.72, 49817.77, 46892.55, 44313.41, 55024.47, 45669.22, 45921.42, 50210.02, 51944.59, 53400.02, 53580.5, 50766.06, 53697.48, 51935.66, 48537.39, 49897.4, 51549.07, 48551.73, 52592.32, 42806.79, 51544.12, 48661.34, 46907.97, 49889.48, 49699.05, 51643.16, 47531.03, 50808.73, 51154.3, 47286.4, 49348.87, 53006.68, 49095.11, 49570.47, 48025.71, 49364.89, 51648.07, 46112.88, 49697.52, 49390.47, 48074.17, 51179.23, 53084.62, 49353.64, 48808.1, 47316.79, 50599.67, 49275.75, 48617.03, 47544.12, 48755.64, 49897.45, 53822.48, 48350.27, 104392.33375254904, 45197.1, 50065.24, 48270.84, 55628.59, 46889.46, 49487.97, 47608.61, 51211.52, 48831.1, 51230.44, 51673.94, 48389.06, 50806.65, 45382.55, 50261.83, 51791.95, 48201.13, 51739.71, 46925.68, 44415.93, 45450.5, 53543.01, 44093.9, 51787.79, 83622.556679541, 49613.45, 48477.55, 50874.37, 48741.4, 44158.56, 46942.11, 47467.04, 42758.02, 45014.53, 47960.9, 46948.88, 44640.29, 41630.64, 47843.34, 48789.04, 42696.38, 47547.3, 47854.81, 43577.51, 50843.44, 44592.69, 47373.49, 46624.03, 44945.53, 46776.3, 44768.19, 45067.89, 47478.01, 41562.49, 46913.44, 44282.91, 44318.82, 50490.34, 46239.04, 43936.78, 40882.61, 42014.42, 46866.88, 44496.5, 50039.11, 45745.41, 44382.82, 46091.02, 43193.96, 48464.72, 45389.75, 44541.18, 39870.91, 41102.96, 38916.78, 45709.94, 41280.17, 38054.88, 41962.88, 44437.28, 42723.55, 45412.81, 43395.72, 40085.1, 43924.95, 42288.61, 41499.35, 42860.55, 41331.04, 42386.87, 42552.26, 40984.47, 44101.97, 41345.38, 39278.69, 40084.48, 43393.27, 43185.56, 42205.83, 49455.54, 45581.08, 44409.05, 43386.72, 39393.86, 38717.53, 42414.91, 38914.2, 39441.67, 39869.2, 41714.09, 44793.15, 38646.79, 41465.37, 33777.24, 36766.83, 42780.85, 37844.49, 39719.29, 42000.38, 44513.76, 37164.32, 43613.15, 40564.68, 38174.01, 43585.65, 40238.26, 36223.0, 40991.24, 39924.15, 41282.28, 39230.98, 42830.41, 43089.96, 37860.94, 32607.2, 41560.08, 75707.20208032284, 38155.61, 39383.21, 37460.47, 38370.34, 42228.22, 41270.52, 37167.08, 36465.0, 39988.1, 40138.16, 39650.67, 41778.41, 42063.02, 38868.85, 37441.01, 36933.27, 38120.17, 40202.39, 36389.47, 42731.95, 36568.15, 40484.8, 44054.8, 39909.38, 35025.99, 45265.23, 41069.66, 80622.38731571048, 43429.64, 39775.99, 43884.78, 42371.97, 39056.22, 46428.55, 91875.8853647888, 45472.5, 40008.76, 46832.75, 41319.97, 40704.65, 41428.68, 42488.84, 39524.72, 45906.66, 41600.13, 40189.99, 43636.87, 66815.71552921538, 39616.66, 45735.68, 40889.05, 41919.69, 44108.53, 42857.82, 42224.92, 45623.75, 42156.39, 39965.93, 46484.77, 44739.32, 41330.15, 46560.49, 44141.2, 44380.59, 49611.05, 43305.31, 46248.1, 45229.52, 44548.16, 48264.06, 44572.06, 45480.03, 46606.33, 43272.92, 44006.29, 40712.85, 43765.53, 47081.68, 40397.8, 46373.46, 45572.24, 46479.61, 48806.72, 47264.11, 42688.07, 45008.52, 45126.74, 46803.01, 48394.39, 44903.24, 46472.85, 46159.24, 47252.29, 44556.7, 44598.66, 47296.88, 43362.48, 44329.9, 47384.92, 46593.69, 44231.41, 46433.44, 49315.52, 47812.2, 53959.21, 49928.63, 43488.37, 48841.57, 46214.73, 50042.87, 49016.14, 47602.14, 43717.59, 47574.34, 48254.6, 46491.89, 50308.41, 52375.86, 48005.56, 45913.79, 48839.65, 50987.55, 45030.87, 48842.81, 49073.42, 49911.68, 50996.49, 52591.39, 48640.18, 48824.03, 47901.57, 54425.4, 46340.79, 51022.51, 47901.6, 46433.63, 50322.01, 44782.02, 46563.63, 47123.1, 54278.54, 50642.74, 113505.55248456668, 47716.93, 50558.85, 49123.26, 57351.54, 56385.44, 50862.46, 48729.51, 55155.48, 51478.39, 51756.03, 45629.83, 48329.17, 50066.08, 49574.53, 50984.48, 53569.49, 49115.95, 53350.92, 48058.68, 51564.95, 49688.07, 44163.47, 48451.78, 53220.31, 54591.2, 50303.23, 51395.12, 54900.91, 54861.22, 52101.59, 54700.18, 53121.13, 49893.11, 55569.69, 55282.95, 57182.06, 48328.9, 50539.97, 53459.65, 45521.6, 49636.15, 47969.5, 49996.25, 49546.07, 55144.65, 50239.69, 52121.32, 43440.55, 48732.0, 55151.46, 56068.51, 51180.69, 46351.36, 52930.59, 46848.09, 53800.34, 54224.16, 51603.61, 50702.5, 49267.1, 49521.86, 52463.15, 49268.78, 52988.36, 52714.0, 49127.58, 54504.65, 50006.22, 51030.52, 47091.87, 50096.26, 53313.6, 52248.75, 50255.62, 52958.9, 52652.82, 49756.94, 52582.84, 53546.99, 48625.59, 52276.12, 85239.98737268368, 49879.08, 53737.53, 50877.7, 53178.94, 50479.59, 50482.05, 56528.65, 55916.17, 49272.86, 50051.82, 49292.9, 54768.3, 51178.39, 47602.84, 48754.5, 49379.76, 51681.06, 46389.34, 52408.35, 55365.68, 47179.88, 48229.82, 55825.23, 55838.24, 49644.04, 49679.81, 48985.88, 51037.78, 52199.6, 52890.46, 47909.93, 49640.9, 49437.46, 53024.96, 50423.84, 48297.97, 50310.24, 45351.73, 52424.17, 50802.51, 50197.52, 55244.28, 49683.25, 49871.41, 50369.08, 51402.71, 51322.49, 48610.32, 48723.06, 50094.06, 52479.2, 53167.92, 48660.39, 50005.08, 47514.38, 51261.29, 51594.77, 47284.22, 49628.15, 49772.75, 49762.65, 47768.21, 46920.41, 51002.74, 53062.83, 47106.09, 51208.93, 51194.47, 50982.66, 47801.95, 48206.11, 53357.51, 43592.79, 50688.58, 53245.5, 53848.8, 51287.92, 48762.94, 50272.84, 48588.08, 51051.85, 49130.24, 49763.24, 50849.82, 45619.13, 51198.66, 52601.01, 47369.54, 44262.03, 50846.52, 52910.62, 48033.24, 49215.81, 47111.83, 46993.73, 47842.72, 43856.38, 46814.61, 47992.98, 49234.66, 52180.68, 46892.47, 51404.72, 47101.2, 50511.83, 48059.23, 45959.74, 49300.12, 47114.87, 47500.66, 47162.65, 54752.97, 46949.38, 47889.43, 46233.74, 44730.3, 49372.1, 45633.97, 49277.09, 43974.78, 47248.06, 51089.4, 47449.32, 45044.05, 47591.53, 46002.42, 47776.12, 48523.5, 49587.71, 47624.08, 50426.09, 47691.94, 49229.47, 53809.99, 45412.77, 42257.62, 45760.22, 49381.48, 44975.68, 48586.54, 45552.74, 44163.67, 51210.67, 46177.5, 47885.87, 47176.25, 47613.18, 46757.43, 46670.02, 47999.02, 47634.86, 51584.12, 48320.8, 46944.64, 45080.93, 49670.94, 45553.35, 46303.57, 44142.85, 48251.54, 47608.79, 42061.54, 41809.99, 40920.81, 48574.03, 50709.4, 42927.09, 42879.51, 45322.7, 51872.99, 43674.25, 43200.82, 48112.83, 46856.85, 41892.54, 48222.55, 41343.95, 49624.28, 83793.39793887445, 45086.22, 46713.04, 47033.8, 49359.6, 47910.22, 48835.98, 49002.36, 50175.5, 46216.19, 45173.63, 42449.29, 45420.78, 43809.15, 49368.88, 46123.21, 45799.57, 49286.35, 41067.79, 51859.77, 47170.98, 42943.83, 43982.15, 42866.77, 43171.48, 44765.51, 42927.5, 48486.34, 45185.82, 48577.55, 45595.74, 46111.4, 46005.13, 44006.63, 43831.47, 46786.43, 46221.23, 48954.94, 44421.36, 47948.62, 46538.72, 50557.73, 46347.26, 46204.12, 47648.35, 45144.01, 49475.63, 45677.02, 53985.06, 47013.32, 45445.01, 46439.04, 42456.67, 41173.03, 45237.5, 49227.22, 43363.65, 52785.89, 81022.68995971659, 51830.33, 51231.49, 49512.53, 46888.25, 47851.3, 44377.41, 49186.49, 48464.15, 47218.03, 48008.71, 48430.08, 49083.73, 44226.0, 83245.12252662698, 51167.05, 48695.27, 51876.69, 48616.73, 50147.56, 50388.45, 49691.05, 51790.7, 47998.83, 49916.3, 47165.13, 49500.04, 111568.46085487083, 50742.3, 52138.55, 52901.74, 48554.61, 46452.85, 48896.65, 50244.57, 49276.33, 55025.72, 48457.98, 53857.7, 50205.54, 49226.12, 52992.86, 48125.61, 50990.51, 51929.57, 52281.76, 53559.94, 56894.71, 53609.85, 53773.58, 50868.34, 55460.11, 53250.67, 49969.84, 60233.73, 50727.49, 56831.73, 54567.21, 50879.25, 55326.81, 50272.13, 56497.9, 55867.7, 54368.44, 57147.98, 58715.16, 53110.75, 51069.6, 49744.48, 52825.74, 56855.74, 58733.13, 52526.38, 50949.44, 54999.66, 56825.66, 53860.67, 57756.91, 55330.01, 56457.59, 57366.01, 52039.38, 54622.93, 55837.4, 56149.64, 53063.34, 53378.41, 61031.94, 57411.61, 57376.6, 56797.92, 55611.96, 60582.39, 55940.5, 57456.59, 56476.64, 52858.78, 54335.53, 54628.72, 55512.12, 62501.34, 60528.94, 57962.62, 57050.81, 56697.31, 56457.87, 57394.88, 53707.23, 58047.09, 114348.69471403609, 54231.53, 61624.26, 54429.27, 60209.46, 66023.88, 55445.39, 51523.84, 59828.83, 63145.4, 61196.19, 55108.78, 58725.65, 54572.6, 56060.56, 61099.09, 54734.09, 58664.97, 59466.44, 137088.3195974527, 132295.5386794393, 60084.77, 56925.32, 58970.3, 59112.2, 58083.61, 59166.35, 59631.53, 58612.55, 60964.26, 62680.52, 54703.44, 59217.78, 56017.48, 56114.72, 56406.13, 63059.75, 56055.52, 63897.26, 59209.36, 59962.34, 57100.47, 59534.9, 58746.81, 57144.4, 62096.74, 60874.05, 56263.59, 56747.03, 57289.79, 60327.35, 59613.17, 55228.72, 58380.76, 55882.03, 56213.31, 56172.34, 59346.76, 62664.1, 55193.14, 59180.69, 54937.27, 57123.29, 60089.22, 57258.16, 58473.22, 60492.26, 60861.9, 60516.36, 56869.36, 56738.05, 59659.3, 59269.9, 59660.42, 58316.17, 58925.96, 60101.98, 58849.69, 55953.51, 55666.06, 55473.81, 56774.72, 53391.47, 55371.61, 53927.81, 52160.68, 58801.75, 55824.74, 52859.82, 53546.13, 58812.97, 52700.74, 57075.79, 52977.85, 53427.61, 56708.42, 56645.09, 53420.59, 51081.2, 56679.63, 51687.48, 53742.63, 54588.21, 57828.93, 48754.9, 47153.06, 52347.58, 59548.47, 52539.77, 52560.36, 52268.08, 57042.63, 49894.49, 52476.14, 56706.85, 52254.65, 54074.57, 53143.49, 50728.16, 50248.04, 49680.11, 50808.82, 49609.53, 48390.87, 53541.17, 49988.5, 53070.6, 54276.54, 49306.49, 48246.36, 49591.31, 52103.03, 49120.95, 48448.66, 50329.35, 45908.39, 50674.02, 49341.38, 52984.31, 50888.89, 50980.31, 53408.62, 50160.5, 50510.61, 50743.81, 50434.36, 49846.63, 44539.6, 51645.03, 51475.53, 53894.4, 51398.71, 48170.75, 48899.29, 47182.36, 48918.49, 46957.88, 49203.64, 47766.16, 47043.21, 43281.42, 44944.17, 51625.86, 46699.37, 44219.76, 46266.38, 45078.29, 46595.65, 45267.03, 49792.16, 52722.51, 48664.97, 49933.65, 48453.73, 42394.47, 49282.88, 46250.79, 47149.03, 44761.92, 48714.2, 50997.76, 47570.06, 47667.57, 47743.61, 50984.0, 44413.07, 49579.83, 47282.91, 49799.84, 48772.56, 49406.44, 48958.87, 46676.55, 50586.04, 45246.69, 53141.68, 45065.41, 50299.79, 46569.35, 41756.24, 46352.74, 52308.43, 49619.03, 49564.19, 46519.7, 48759.96, 52820.52, 48690.02, 50948.24, 50327.33, 49736.96, 50773.04, 46615.08, 48525.76, 46660.16, 48149.59, 48813.27, 47646.22, 55267.14, 44359.18, 43513.96, 50229.45, 51673.08, 52620.46, 48721.03, 50062.96, 52165.73, 45872.41, 49714.82, 50630.74, 44262.03, 51981.87, 55866.39, 49795.07, 51677.9, 48769.93, 49487.06, 48639.09, 48541.65, 53131.86, 54542.77, 49726.24, 50390.95, 54567.96, 48906.8, 56034.11, 46390.05, 49606.6, 48306.63, 48761.84, 55624.83, 54152.64, 52562.39, 51688.22, 53296.1, 51165.26, 54848.86, 51917.64, 53239.9, 54273.18, 51735.36, 55823.63, 54637.23, 53005.55, 55958.59, 49195.47, 61716.52, 52404.39, 54557.03, 55356.36, 56311.14], "type": "scatter", "marker": {"color": "#30cfd0", "size": 8, "line": {"color": "white", "width": 2}}, "hovertemplate": "<b>%{x}</b><br>%{y:,.2f}<extra></extra>"}], {"xaxis": {"title": {"text": "Categories", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": true, "linewidth": 1, "linecolor": "#e2e8f0", "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "yaxis": {"title": {"text": "Value", "font": {"size": 13, "color": "#64748b", "family": "Inter, sans-serif"}}, "showgrid": true, "gridwidth": 1, "gridcolor": "#f1f5f9", "showline": false, "zeroline": false, "tickfont": {"size": 11, "color": "#64748b"}}, "hovermode": "closest", "plot_bgcolor": "white", "paper_bgcolor": "white", "font": {"family": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", "size": 12, "color": "#1a202c"}, "margin": {"l": 60, "r": 20, "t": 20, "b": 60}, "hoverlabel": {"bgcolor": "white", "bordercolor": "#e2e8f0", "font": {"family": "Inter, sans-serif", "size": 12, "color": "#000000"}}}, {"displayModeBar": true, "responsive": true, "displaylogo": false, "modeBarButtonsToRemove": ["zoom2d", "pan2d", "select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d", "hoverClosestCartesian", "hoverCompareCartesian", "toggleSpikelines"], "toImageButtonOptions": {"format": "png", "filename": "chart_6", "height": 800, "width": 1200, "scale": 2}});
+        
+    </script>
+</body>
+</html>
