@@ -205,7 +205,11 @@ class BusinessDiscoveryWorkflow:
             return initial_state
 
     def _load_data_node(self, state: BusinessDiscoveryState) -> BusinessDiscoveryState:
-        """Load all datasets into memory for analysis."""
+        """Load selected datasets into memory for analysis.
+
+        If state['dataset_ids'] is provided and non-empty, only those datasets are
+        loaded. Otherwise, all company datasets are loaded (legacy behavior).
+        """
 
         print("\n[STEP 1] Loading Data from Database")
         print("-" * 40)
@@ -218,10 +222,43 @@ class BusinessDiscoveryWorkflow:
         )
 
         try:
-            # Load all datasets
-            datasets = self.explorer.load_datasets(state['company_id'])
-            state['datasets'] = datasets
-            state['metadata'] = self.explorer.metadata
+            selected_ids = state.get('dataset_ids') or []
+
+            if selected_ids:
+                # Load only selected datasets
+                from src.database.repository import DatasetRepository
+                from src.database.connection import DatabaseManager
+
+                self.explorer.datasets = {}
+                self.explorer.metadata = {}
+
+                with DatabaseManager.get_session() as session:
+                    for ds_id in selected_ids:
+                        ds = DatasetRepository.get_dataset_by_id(session, ds_id)
+                        if not ds:
+                            continue
+                        try:
+                            df = DatasetRepository.load_dataframe(session, ds_id)
+                            if df is not None:
+                                self.explorer.datasets[ds.table_name] = df
+                                self.explorer.metadata[ds.table_name] = {
+                                    'domain': ds.domain,
+                                    'description': ds.description,
+                                    'entities': ds.entities,
+                                    'row_count': ds.row_count,
+                                    'column_count': ds.column_count
+                                }
+                        except Exception as e:
+                            print(f"  [WARN] Failed to load dataset {ds_id}: {e}")
+
+                datasets = self.explorer.datasets
+                state['datasets'] = datasets
+                state['metadata'] = self.explorer.metadata
+            else:
+                # Fallback: load all company datasets
+                datasets = self.explorer.load_datasets(state['company_id'])
+                state['datasets'] = datasets
+                state['metadata'] = self.explorer.metadata
 
             for name, df in datasets.items():
                 print(f"  [OK] {name}: {df.shape[0]:,} rows x {df.shape[1]} columns")
@@ -240,14 +277,44 @@ class BusinessDiscoveryWorkflow:
             analysis_dir = os.path.join("data", "outputs", "analyses", company_id, analysis_id)
             os.makedirs(analysis_dir, exist_ok=True)
 
+            # Derive company name from DB (fallback to ID) and sanitize for filenames
+            from src.database.connection import DatabaseManager as _DBM
+            from src.database.repository import CompanyRepository as _CR
+            company_name_val = None
+            try:
+                with _DBM.get_session() as _session:
+                    _company = _CR.get_company_by_id(_session, company_id)
+                    company_name_val = _company.name if _company else None
+            except Exception:
+                company_name_val = None
+
+            if not company_name_val:
+                company_name_val = company_id
+
+            company_slug = ''.join(
+                ch if ch.isalnum() or ch in ('-', '_') else '_' for ch in company_name_val.lower().replace(' ', '_')
+            )
+
+            # Compute a simple domain label from selected datasets' metadata
+            meta_values = state.get('metadata', {}) or {}
+            domain_values = [m.get('domain') for m in meta_values.values() if isinstance(m, dict) and m.get('domain')]
+            unique_domains = list({d for d in domain_values if d})
+            if len(unique_domains) == 0:
+                domain_label = 'Unknown'
+            elif len(unique_domains) == 1:
+                domain_label = unique_domains[0]
+            else:
+                domain_label = 'Multiple'
+
             # Initialize visualization data store for this analysis
-            company_name = state.get('company_name', 'unknown_company')
             self.viz_data_store = VisualizationDataStore(
-                dataset_name=f"business_discovery_{company_name}",
+                dataset_name=f"business_discovery_{company_slug}",
                 dataset_context={
                     'company_id': state['company_id'],
+                    'company_name': company_name_val,
                     'datasets': list(datasets.keys()),
-                    'analysis_type': 'business_discovery'
+                    'domain': domain_label,
+                    'dataset_type': 'Business Discovery'
                 },
                 output_dir=analysis_dir
             )

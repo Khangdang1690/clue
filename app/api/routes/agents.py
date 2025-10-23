@@ -268,11 +268,18 @@ async def run_business_discovery(
 
         # Get dataset IDs to analyze
         dataset_ids = request.dataset_ids
-        if not dataset_ids:
+        # Only default to all datasets when the client did not provide the field at all
+        if dataset_ids is None:
             # If no specific datasets provided, analyze all company datasets
             dataset_repo = DatasetRepository(db)
             datasets = dataset_repo.get_by_company(user.company_id)
             dataset_ids = [d.id for d in datasets]
+        # If the client explicitly provided an empty list, treat as invalid selection
+        if isinstance(dataset_ids, list) and len(dataset_ids) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No datasets selected. Please choose at least one dataset."
+            )
 
         if not dataset_ids:
             raise HTTPException(
