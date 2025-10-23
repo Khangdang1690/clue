@@ -631,15 +631,18 @@ class ETLWorkflow:
 
                 relationships_data = []
                 for i, rel in enumerate(state['relationships']):
-                    # The relationships use file IDs (e.g., 'file_0'), not dataset IDs
-                    from_file_id = rel['from_dataset_id']
-                    to_file_id = rel['to_dataset_id']
-                    from_dataset_id = state['dataset_ids'].get(from_file_id)
-                    to_dataset_id = state['dataset_ids'].get(to_file_id)
+                    # Relationship endpoints may reference new file IDs (e.g., 'file_0') or existing dataset IDs (UUIDs)
+                    from_ref = rel['from_dataset_id']
+                    to_ref = rel['to_dataset_id']
+
+                    # Resolve: map new file IDs to newly created dataset IDs; leave existing IDs as-is
+                    from_dataset_id = state['dataset_ids'].get(from_ref) or from_ref
+                    to_dataset_id = state['dataset_ids'].get(to_ref) or to_ref
 
                     if i == 0:  # Debug first relationship
-                        print(f"    First rel: from={from_file_id} -> {from_dataset_id}, to={to_file_id} -> {to_dataset_id}")
+                        print(f"    First rel: from={from_ref} -> {from_dataset_id}, to={to_ref} -> {to_dataset_id}")
 
+                    # Both must resolve to actual dataset IDs
                     if from_dataset_id and to_dataset_id:
                         # Convert numpy types to Python native types
                         confidence = float(rel['confidence'])
@@ -657,7 +660,7 @@ class ETLWorkflow:
                         })
                         print(f"    Queued: {rel['from_column']} -> {rel['to_column']} (conf: {confidence:.2f})")
                     else:
-                        print(f"    Skipped relationship: from_id={from_file_id} ({from_dataset_id}), to_id={to_file_id} ({to_dataset_id})")
+                        print(f"    Skipped relationship: from_ref={from_ref} (resolved: {from_dataset_id}), to_ref={to_ref} (resolved: {to_dataset_id})")
 
                 # Bulk insert all relationships at once (much faster than individual inserts)
                 if relationships_data:
